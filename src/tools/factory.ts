@@ -1,0 +1,152 @@
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod/v4";
+import { OPTION_CATALOG } from "../constants.js";
+import {
+  sanitizeToolName,
+  deriveServerName,
+  deriveToolName,
+  serializeArrayEnv,
+} from "../lib.js";
+
+function buildEnvFromParams(
+  params: Record<string, unknown>
+): Record<string, string> {
+  const env: Record<string, string> = {};
+
+  for (const opt of OPTION_CATALOG) {
+    const val = params[opt.key];
+    if (val === undefined || val === null) continue;
+
+    if (Array.isArray(val)) {
+      if (val.length > 0) env[opt.envVar] = serializeArrayEnv(val);
+    } else if (typeof val === "object") {
+      env[opt.envVar] = JSON.stringify(val);
+    } else if (typeof val === "boolean") {
+      env[opt.envVar] = String(val);
+    } else if (val !== "") {
+      env[opt.envVar] = String(val);
+    }
+  }
+
+  return env;
+}
+
+export function registerFactoryTool(
+  server: McpServer,
+  serverEntry: string
+) {
+  server.registerTool("create_claude_code_mcp", {
+    description: [
+      "Create a new specialized Claude Code agent as an MCP server.",
+      "WHEN TO USE: user says 'create agent', 'new agent', 'set up agent',",
+      "'configure agent', 'add a reviewer', 'add a test writer',",
+      "'make me a code reviewer', 'I need a specialized agent', etc.",
+      "DO NOT USE when user just wants to run a task — use the main tool for that.",
+      "This is a wizard: only a description is required.",
+      "Returns a ready-to-use .mcp.json config and lists all customization options.",
+      "Call again with more parameters to refine.",
+    ].join(" "),
+    inputSchema: z.object({
+      description: z.string().describe(
+        "What this agent should do, in plain language. Example: 'a strict code reviewer that only reads files'"
+      ),
+      name: z.string().optional().describe("Server name / alias (derived from description if omitted)"),
+      toolName: z.string().optional().describe("Custom tool name prefix"),
+      model: z.string().optional(),
+      systemPrompt: z.string().optional(),
+      appendPrompt: z.string().optional(),
+      allowedTools: z.array(z.string()).optional(),
+      disallowedTools: z.array(z.string()).optional(),
+      cwd: z.string().optional(),
+      additionalDirs: z.array(z.string()).optional(),
+      plugins: z.array(z.string()).optional(),
+      maxTurns: z.number().optional(),
+      maxBudgetUsd: z.number().optional(),
+      effort: z.enum(["low", "medium", "high", "max"]).optional(),
+      persistSession: z.boolean().optional(),
+      permissionMode: z.enum(["bypassPermissions", "acceptEdits", "default", "plan"]).optional(),
+      settingSources: z.array(z.string()).optional(),
+      mcpServers: z.record(z.string(), z.unknown()).optional(),
+      betas: z.array(z.string()).optional(),
+      apiKey: z.string().optional().describe("Anthropic API key for this agent (leave unset to inherit)"),
+      oauthToken: z.string().optional().describe("Claude Code OAuth token for this agent (leave unset to inherit)"),
+    }),
+  }, async (params) => {
+    const { description, name: nameParam, toolName: toolNameParam } = params;
+
+    const name = nameParam || deriveServerName(description);
+    const derivedToolName = toolNameParam
+      ? sanitizeToolName(toolNameParam)
+      : deriveToolName(name);
+
+    const env: Record<string, string> = {
+      CLAUDE_TOOL_NAME: derivedToolName,
+      CLAUDE_SERVER_NAME: name,
+      CLAUDE_DESCRIPTION: description,
+    };
+
+    const optionEnv = buildEnvFromParams(params);
+    Object.assign(env, optionEnv);
+
+    const configured = Object.keys(optionEnv);
+    const notConfigured = OPTION_CATALOG.filter(
+      (o) => !configured.includes(o.envVar)
+    );
+
+    const mcpEntry = {
+      [name]: {
+        command: "node",
+        args: [serverEntry],
+        env,
+      },
+    };
+
+    const sections: string[] = [];
+
+    sections.push(
+      "## Generated config",
+      "",
+      "Add to `mcpServers` in your `.mcp.json`:",
+      "",
+      "```json",
+      JSON.stringify(mcpEntry, null, 2),
+      "```"
+    );
+
+    sections.push("", "## What's configured");
+    sections.push("", `| Setting | Value |`, `|---|---|`);
+    sections.push(`| Name | \`${name}\` |`);
+    sections.push(`| Tool names | \`${derivedToolName}\`, \`${derivedToolName}_reply\` |`);
+    for (const key of configured) {
+      const opt = OPTION_CATALOG.find((o) => o.envVar === key);
+      if (opt) {
+        sections.push(`| ${opt.label} | \`${env[key]}\` |`);
+      }
+    }
+    if (configured.length === 0) {
+      sections.push(`| _(all defaults)_ | — |`);
+    }
+
+    if (notConfigured.length > 0) {
+      sections.push(
+        "",
+        "## Available customizations",
+        "",
+        "These options are not yet set. Ask the user if they'd like to configure any:",
+        ""
+      );
+      for (const opt of notConfigured) {
+        sections.push(`- **${opt.label}** — ${opt.hint}`);
+        sections.push(`  Example: ${opt.example}`);
+      }
+      sections.push(
+        "",
+        "_Call this tool again with additional parameters to refine the config._"
+      );
+    }
+
+    return {
+      content: [{ type: "text" as const, text: sections.join("\n") }],
+    };
+  });
+}
