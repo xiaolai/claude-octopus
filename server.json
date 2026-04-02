@@ -1,0 +1,71 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.xiaolai/claude-octopus",
+  "description": "Spawn multiple specialized Claude Code agents as MCP servers, each independently configured.",
+  "repository": {
+    "url": "https://github.com/xiaolai/claude-octopus",
+    "source": "github"
+  },
+  "version": "1.0.4",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "claude-octopus",
+      "version": "1.0.4",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "ANTHROPIC_API_KEY",
+          "description": "Anthropic API key (leave unset to inherit from parent process)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "CLAUDE_TOOL_NAME",
+          "description": "Tool name prefix (default: claude_code)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "CLAUDE_MODEL",
+          "description": "Model: sonnet, opus, haiku, or full ID",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "CLAUDE_PERMISSION_MODE",
+          "description": "Permission mode: default, acceptEdits, bypassPermissions, plan",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "CLAUDE_ALLOWED_TOOLS",
+          "description": "Comma-separated list of available tools (e.g. Read,Grep,Glob for read-only)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "CLAUDE_APPEND_PROMPT",
+          "description": "Additional system prompt appended to the default",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "CLAUDE_FACTORY_ONLY",
+          "description": "Set to true to expose only the factory wizard tool",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}

@@ -1,7 +1,8 @@
 {
   "name": "claude-octopus",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "One brain, many arms — spawn multiple specialized Claude Code agents as MCP servers",
+  "mcpName": "io.github.xiaolai/claude-octopus",
   "type": "module",
   "bin": {
     "claude-octopus": "dist/index.js"
