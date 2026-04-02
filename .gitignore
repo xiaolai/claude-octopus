@@ -8,3 +8,4 @@ coverage/
 CLAUDE.md
 CLAUDE.local.md
 .npmrc
+.mcpregistry_*
