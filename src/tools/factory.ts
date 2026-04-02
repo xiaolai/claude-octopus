@@ -37,11 +37,11 @@ export function registerFactoryTool(
 ) {
   server.registerTool("create_claude_code_mcp", {
     description: [
-      "Create a new specialized Claude Code agent as an MCP server.",
-      "WHEN TO USE: user says 'create agent', 'new agent', 'set up agent',",
-      "'configure agent', 'add a reviewer', 'add a test writer',",
-      "'make me a code reviewer', 'I need a specialized agent', etc.",
-      "DO NOT USE when user just wants to run a task — use the main tool for that.",
+      "Generate a .mcp.json config entry for a new Claude Octopus MCP server instance.",
+      "WHEN TO USE: user says 'octopus agent', 'octopus mcp',",
+      "'new octopus', 'add octopus', 'create octopus',",
+      "'octopus instance', 'octopus config', 'octopus server',",
+      "or any phrase combining 'octopus' with agent/mcp/new/add/create/config/server/setup.",
       "This is a wizard: only a description is required.",
       "Returns a ready-to-use .mcp.json config and lists all customization options.",
       "Call again with more parameters to refine.",
