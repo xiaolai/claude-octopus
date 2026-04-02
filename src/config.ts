@@ -29,8 +29,8 @@ export function buildBaseOptions(): Options {
   const model = envStr("CLAUDE_MODEL");
   if (model) opts.model = model;
 
-  const allowed = envList("CLAUDE_ALLOWED_TOOLS");
-  if (allowed) opts.allowedTools = allowed;
+  const tools = envList("CLAUDE_ALLOWED_TOOLS");
+  if (tools) opts.tools = tools;
   const disallowed = envList("CLAUDE_DISALLOWED_TOOLS");
   if (disallowed) opts.disallowedTools = disallowed;
 
@@ -78,14 +78,15 @@ export function buildBaseOptions(): Options {
 
   const settings = envStr("CLAUDE_SETTINGS");
   if (settings) {
-    if (settings.startsWith("{")) {
+    const trimmed = settings.trim();
+    if (trimmed.startsWith("{")) {
       try {
-        opts.settings = JSON.parse(settings);
-      } catch {
-        opts.settings = settings;
+        opts.settings = JSON.parse(trimmed);
+      } catch (e) {
+        console.error(`claude-octopus: invalid CLAUDE_SETTINGS JSON: ${e instanceof Error ? e.message : e}`);
       }
     } else {
-      opts.settings = settings;
+      opts.settings = trimmed;
     }
   }
 

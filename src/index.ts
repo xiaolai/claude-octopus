@@ -12,16 +12,14 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
+import { createRequire } from "node:module";
 import { envStr, envBool, sanitizeToolName } from "./lib.js";
 import { buildBaseOptions } from "./config.js";
 import { registerQueryTools } from "./tools/query.js";
 import { registerFactoryTool } from "./tools/factory.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const SERVER_ENTRY = resolve(__dirname, "index.js");
+const require = createRequire(import.meta.url);
+const { version: PKG_VERSION } = require("../package.json");
 
 // ── Configuration ──────────────────────────────────────────────────
 
@@ -43,14 +41,14 @@ const TOOL_DESCRIPTION = envStr("CLAUDE_DESCRIPTION") || DEFAULT_DESCRIPTION;
 
 // ── Server ─────────────────────────────────────────────────────────
 
-const server = new McpServer({ name: SERVER_NAME, version: "1.0.0" });
+const server = new McpServer({ name: SERVER_NAME, version: PKG_VERSION });
 
 if (!FACTORY_ONLY) {
   registerQueryTools(server, BASE_OPTIONS, TOOL_NAME, TOOL_DESCRIPTION);
 }
 
 if (FACTORY_ONLY) {
-  registerFactoryTool(server, SERVER_ENTRY);
+  registerFactoryTool(server);
 }
 
 // ── Start ──────────────────────────────────────────────────────────

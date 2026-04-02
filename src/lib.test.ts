@@ -8,9 +8,10 @@ import {
   sanitizeToolName,
   MAX_TOOL_NAME_LEN,
   isDescendantPath,
-  mergeAllowedTools,
+  mergeTools,
   mergeDisallowedTools,
   validatePermissionMode,
+  narrowPermissionMode,
   VALID_PERM_MODES,
   deriveServerName,
   deriveToolName,
@@ -202,24 +203,24 @@ describe("isDescendantPath", () => {
   });
 });
 
-// ── mergeAllowedTools ──────────────────────────────────────────────
+// ── mergeTools ───────────────────────────────────────────────────
 
-describe("mergeAllowedTools", () => {
+describe("mergeTools", () => {
   it("intersects when server has a list", () => {
     expect(
-      mergeAllowedTools(["Read", "Grep", "Glob"], ["Read", "Write", "Glob"])
+      mergeTools(["Read", "Grep", "Glob"], ["Read", "Write", "Glob"])
     ).toEqual(["Read", "Glob"]);
   });
 
   it("passes through when server has no list", () => {
     expect(
-      mergeAllowedTools(undefined, ["Read", "Write"])
+      mergeTools(undefined, ["Read", "Write"])
     ).toEqual(["Read", "Write"]);
   });
 
   it("returns empty when no overlap", () => {
     expect(
-      mergeAllowedTools(["Read"], ["Write"])
+      mergeTools(["Read"], ["Write"])
     ).toEqual([]);
   });
 });
@@ -257,6 +258,52 @@ describe("validatePermissionMode", () => {
     expect(validatePermissionMode("allowEdits")).toBe("default");
     expect(validatePermissionMode("garbage")).toBe("default");
     expect(validatePermissionMode("")).toBe("default");
+    expect(validatePermissionMode("auto")).toBe("default");
+  });
+});
+
+// ── narrowPermissionMode ──────────────────────────────────────────
+
+describe("narrowPermissionMode", () => {
+  it("allows tightening from bypassPermissions to stricter modes", () => {
+    expect(narrowPermissionMode("bypassPermissions", "acceptEdits")).toBe("acceptEdits");
+    expect(narrowPermissionMode("bypassPermissions", "default")).toBe("default");
+    expect(narrowPermissionMode("bypassPermissions", "plan")).toBe("plan");
+    expect(narrowPermissionMode("bypassPermissions", "dontAsk")).toBe("dontAsk");
+  });
+
+  it("allows tightening from acceptEdits to stricter modes", () => {
+    expect(narrowPermissionMode("acceptEdits", "default")).toBe("default");
+    expect(narrowPermissionMode("acceptEdits", "plan")).toBe("plan");
+    expect(narrowPermissionMode("acceptEdits", "dontAsk")).toBe("dontAsk");
+  });
+
+  it("dontAsk is the strictest — rejects all loosening", () => {
+    expect(narrowPermissionMode("dontAsk", "bypassPermissions")).toBe("dontAsk");
+    expect(narrowPermissionMode("dontAsk", "acceptEdits")).toBe("dontAsk");
+    expect(narrowPermissionMode("dontAsk", "default")).toBe("dontAsk");
+    expect(narrowPermissionMode("dontAsk", "plan")).toBe("dontAsk");
+    expect(narrowPermissionMode("dontAsk", "dontAsk")).toBe("dontAsk");
+  });
+
+  it("rejects loosening — returns base unchanged", () => {
+    expect(narrowPermissionMode("default", "bypassPermissions")).toBe("default");
+    expect(narrowPermissionMode("default", "acceptEdits")).toBe("default");
+    expect(narrowPermissionMode("plan", "bypassPermissions")).toBe("plan");
+    expect(narrowPermissionMode("plan", "acceptEdits")).toBe("plan");
+    expect(narrowPermissionMode("plan", "default")).toBe("plan");
+  });
+
+  it("same mode returns same mode", () => {
+    expect(narrowPermissionMode("default", "default")).toBe("default");
+    expect(narrowPermissionMode("plan", "plan")).toBe("plan");
+    expect(narrowPermissionMode("bypassPermissions", "bypassPermissions")).toBe("bypassPermissions");
+  });
+
+  it("invalid override returns base unchanged", () => {
+    expect(narrowPermissionMode("default", "garbage")).toBe("default");
+    expect(narrowPermissionMode("bypassPermissions", "")).toBe("bypassPermissions");
+    expect(narrowPermissionMode("default", "auto")).toBe("default");
   });
 });
 

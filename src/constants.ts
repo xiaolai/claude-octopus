@@ -25,8 +25,8 @@ export const OPTION_CATALOG: OptionCatalogEntry[] = [
   {
     key: "allowedTools",
     envVar: "CLAUDE_ALLOWED_TOOLS",
-    label: "Allowed tools",
-    hint: "Only these tools are available (comma-separated)",
+    label: "Available tools",
+    hint: "Restrict agent to only these tools (comma-separated)",
     example: '"Read,Grep,Glob" for read-only; "Bash,Read,Write,Edit,Grep,Glob" for full access',
   },
   {

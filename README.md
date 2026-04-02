@@ -136,8 +136,12 @@ Per-invocation parameters (override server defaults):
 | `prompt`          | The task or question (required)                 |
 | `cwd`             | Working directory override                      |
 | `model`           | Model override                                  |
-| `allowedTools`    | Tool whitelist (intersects with server default) |
-| `disallowedTools` | Tool blacklist (unions with server default)     |
+| `tools`           | Restrict available tools (intersects with server restriction) |
+| `disallowedTools` | Block additional tools (unions with server blacklist) |
+| `additionalDirs`  | Extra directories the agent can access           |
+| `plugins`         | Additional plugin paths to load                  |
+| `effort`          | Thinking effort (`low`, `medium`, `high`, `max`) |
+| `permissionMode`  | Permission mode (can only tighten, never loosen) |
 | `maxTurns`        | Max conversation turns                          |
 | `maxBudgetUsd`    | Max spend in USD                                |
 | `systemPrompt`    | Additional prompt (appended to server default)  |
@@ -162,7 +166,7 @@ All configuration is via environment variables in `.mcp.json`. Every env var is 
 | `CLAUDE_MODEL`            | Model (`sonnet`, `opus`, `haiku`, or full ID)         | SDK default     |
 | `CLAUDE_CWD`              | Working directory                                     | `process.cwd()` |
 | `CLAUDE_PERMISSION_MODE`  | `default`, `acceptEdits`, `bypassPermissions`, `plan` | `default`       |
-| `CLAUDE_ALLOWED_TOOLS`    | Comma-separated tool whitelist                        | all             |
+| `CLAUDE_ALLOWED_TOOLS`    | Comma-separated tool restriction (available tools)    | all             |
 | `CLAUDE_DISALLOWED_TOOLS` | Comma-separated tool blacklist                        | none            |
 | `CLAUDE_MAX_TURNS`        | Max conversation turns                                | unlimited       |
 | `CLAUDE_MAX_BUDGET_USD`   | Max spend per invocation                              | unlimited       |
@@ -201,8 +205,8 @@ Lists accept JSON arrays when values contain commas: `["path,with,comma", "/norm
 ## Security
 
 - **Permission mode defaults to ****`default`** — tool executions prompt for approval unless you explicitly set `bypassPermissions`.
-- **`cwd`**** overrides are confined** — per-invocation `cwd` must be a descendant of the server-level base directory. Traversal attempts are silently ignored.
-- **Tool restrictions narrow, never widen** — per-invocation `allowedTools` intersects with the server whitelist (can only remove tools, not add). `disallowedTools` unions (can only block more).
+- **`cwd` overrides preserve agent knowledge** — when the host overrides `cwd`, the agent's configured base directory is automatically added to `additionalDirectories` so it retains access to its own context.
+- **Tool restrictions narrow, never widen** — per-invocation `tools` intersects with the server restriction (can only remove tools, not add). `disallowedTools` unions (can only block more).
 - **`_reply`**** tool respects persistence** — not registered when `CLAUDE_PERSIST_SESSION=false`.
 
 ## Architecture
@@ -251,7 +255,7 @@ Lists accept JSON arrays when values contain commas: `["path,with,comma", "/norm
 pnpm install
 pnpm build       # compile TypeScript
 pnpm test        # run tests (vitest)
-pnpm test:coverage  # 100% coverage
+pnpm test:coverage  # coverage report
 ```
 
 ## License

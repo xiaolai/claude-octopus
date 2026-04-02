@@ -33,7 +33,6 @@ function buildEnvFromParams(
 
 export function registerFactoryTool(
   server: McpServer,
-  serverEntry: string
 ) {
   server.registerTool("create_claude_code_mcp", {
     description: [
@@ -93,11 +92,19 @@ export function registerFactoryTool(
       (o) => !configured.includes(o.envVar)
     );
 
+    const SENSITIVE_KEYS = new Set(["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"]);
+
+    // Redact secrets in rendered output, keep real values in config
+    const displayEnv: Record<string, string> = {};
+    for (const [k, v] of Object.entries(env)) {
+      displayEnv[k] = SENSITIVE_KEYS.has(k) ? "<REDACTED>" : v;
+    }
+
     const mcpEntry = {
       [name]: {
-        command: "node",
-        args: [serverEntry],
-        env,
+        command: "npx",
+        args: ["claude-octopus"],
+        env: displayEnv,
       },
     };
 
@@ -120,7 +127,8 @@ export function registerFactoryTool(
     for (const key of configured) {
       const opt = OPTION_CATALOG.find((o) => o.envVar === key);
       if (opt) {
-        sections.push(`| ${opt.label} | \`${env[key]}\` |`);
+        const val = SENSITIVE_KEYS.has(key) ? "<REDACTED>" : env[key];
+        sections.push(`| ${opt.label} | \`${val}\` |`);
       }
     }
     if (configured.length === 0) {

@@ -7,9 +7,9 @@ import {
 } from "@anthropic-ai/claude-agent-sdk";
 import type { Options, InvocationOverrides } from "../types.js";
 import {
-  isDescendantPath,
-  mergeAllowedTools,
+  mergeTools,
   mergeDisallowedTools,
+  narrowPermissionMode,
   buildResultPayload,
   formatErrorMessage,
 } from "../lib.js";
@@ -21,13 +21,53 @@ async function runQuery(
 ): Promise<SDKResultMessage> {
   const options: Options = { ...baseOptions };
 
+  // Handle cwd override — accept any path, preserve agent's base access
   if (overrides.cwd) {
     const baseCwd = baseOptions.cwd || process.cwd();
-    if (isDescendantPath(overrides.cwd, baseCwd)) {
-      options.cwd = resolve(baseCwd, overrides.cwd);
+    const resolvedCwd = resolve(baseCwd, overrides.cwd);
+    if (resolvedCwd !== baseCwd) {
+      options.cwd = resolvedCwd;
+      // Agent's base dir becomes an additional dir so it keeps its knowledge
+      const dirs = new Set(options.additionalDirectories || []);
+      dirs.add(baseCwd);
+      options.additionalDirectories = [...dirs];
     }
   }
+
+  // Per-invocation additionalDirs — unions with server-level + auto-added dirs
+  if (overrides.additionalDirs?.length) {
+    const dirs = new Set(options.additionalDirectories || []);
+    for (const dir of overrides.additionalDirs) {
+      dirs.add(dir);
+    }
+    options.additionalDirectories = [...dirs];
+  }
+
+  // Per-invocation plugins — unions with server-level plugins
+  if (overrides.plugins?.length) {
+    const base = baseOptions.plugins || [];
+    const overridePaths = new Set(base.map((p) => p.path));
+    const merged = [...base];
+    for (const path of overrides.plugins) {
+      if (!overridePaths.has(path)) {
+        merged.push({ type: "local" as const, path });
+        overridePaths.add(path);
+      }
+    }
+    options.plugins = merged;
+  }
+
   if (overrides.model) options.model = overrides.model;
+  if (overrides.effort) options.effort = overrides.effort as Options["effort"];
+
+  // Permission mode can only tighten, never loosen
+  if (overrides.permissionMode) {
+    const base = (baseOptions.permissionMode as string) || "default";
+    const narrowed = narrowPermissionMode(base, overrides.permissionMode);
+    options.permissionMode = narrowed as Options["permissionMode"];
+    options.allowDangerouslySkipPermissions = narrowed === "bypassPermissions";
+  }
+
   if (overrides.maxTurns !== undefined && overrides.maxTurns > 0) {
     options.maxTurns = overrides.maxTurns;
   }
@@ -35,11 +75,9 @@ async function runQuery(
     options.maxBudgetUsd = overrides.maxBudgetUsd;
   if (overrides.resumeSessionId) options.resume = overrides.resumeSessionId;
 
-  if (overrides.allowedTools?.length) {
-    options.allowedTools = mergeAllowedTools(
-      baseOptions.allowedTools,
-      overrides.allowedTools
-    );
+  if (overrides.tools?.length) {
+    const baseTools = Array.isArray(baseOptions.tools) ? baseOptions.tools : undefined;
+    options.tools = mergeTools(baseTools, overrides.tools);
   }
   if (overrides.disallowedTools?.length) {
     options.disallowedTools = mergeDisallowedTools(
@@ -125,16 +163,20 @@ export function registerQueryTools(
       prompt: z.string().describe("Task or question for Claude Code"),
       cwd: z.string().optional().describe("Working directory (overrides CLAUDE_CWD)"),
       model: z.string().optional().describe('Model override (e.g. "sonnet", "opus", "haiku")'),
-      allowedTools: z.array(z.string()).optional().describe("Tool whitelist override"),
-      disallowedTools: z.array(z.string()).optional().describe("Tool blacklist override"),
+      tools: z.array(z.string()).optional().describe("Restrict available tools to this list (intersects with server-level restriction)"),
+      disallowedTools: z.array(z.string()).optional().describe("Additional tools to block (unions with server-level blacklist)"),
+      additionalDirs: z.array(z.string()).optional().describe("Extra directories the agent can access for this invocation"),
+      plugins: z.array(z.string()).optional().describe("Additional plugin paths to load for this invocation (unions with server-level plugins)"),
+      effort: z.enum(["low", "medium", "high", "max"]).optional().describe("Thinking effort override"),
+      permissionMode: z.enum(["default", "acceptEdits", "plan"]).optional().describe("Permission mode override (can only tighten, never loosen)"),
       maxTurns: z.number().int().positive().optional().describe("Max conversation turns"),
-      maxBudgetUsd: z.number().optional().describe("Max spend in USD"),
+      maxBudgetUsd: z.number().positive().optional().describe("Max spend in USD"),
       systemPrompt: z.string().optional().describe("Additional system prompt (appended to server default)"),
     }),
-  }, async ({ prompt, cwd, model, allowedTools, disallowedTools, maxTurns, maxBudgetUsd, systemPrompt }) => {
+  }, async ({ prompt, cwd, model, tools, disallowedTools, additionalDirs, plugins, effort, permissionMode, maxTurns, maxBudgetUsd, systemPrompt }) => {
     try {
       const result = await runQuery(prompt, {
-        cwd, model, allowedTools, disallowedTools, maxTurns, maxBudgetUsd, systemPrompt,
+        cwd, model, tools, disallowedTools, additionalDirs, plugins, effort, permissionMode, maxTurns, maxBudgetUsd, systemPrompt,
       }, baseOptions);
       return formatResult(result);
     } catch (error) {
@@ -155,7 +197,7 @@ export function registerQueryTools(
         cwd: z.string().optional().describe("Working directory override"),
         model: z.string().optional().describe("Model override"),
         maxTurns: z.number().int().positive().optional().describe("Max conversation turns"),
-        maxBudgetUsd: z.number().optional().describe("Max spend in USD"),
+        maxBudgetUsd: z.number().positive().optional().describe("Max spend in USD"),
       }),
     }, async ({ session_id, prompt, cwd, model, maxTurns, maxBudgetUsd }) => {
       try {

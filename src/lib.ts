@@ -94,7 +94,7 @@ export function isDescendantPath(
 
 // ── Tool restriction merging ───────────────────────────────────────
 
-export function mergeAllowedTools(
+export function mergeTools(
   serverList: string[] | undefined,
   callList: string[]
 ): string[] {
@@ -121,11 +121,31 @@ export const VALID_PERM_MODES = new Set([
   "bypassPermissions",
   "plan",
   "dontAsk",
-  "auto",
 ]);
 
 export function validatePermissionMode(mode: string): string {
   return VALID_PERM_MODES.has(mode) ? mode : "default";
+}
+
+// Strictness order: most permissive → most restrictive
+const PERM_STRICTNESS: Record<string, number> = {
+  bypassPermissions: 0,
+  acceptEdits: 1,
+  default: 2,
+  plan: 3,
+  dontAsk: 4,
+};
+
+/**
+ * Narrow permission mode: returns the stricter of base and override.
+ * Callers can tighten permissions but never loosen them.
+ * Returns base unchanged if override is invalid or less strict.
+ */
+export function narrowPermissionMode(base: string, override: string): string {
+  if (!VALID_PERM_MODES.has(override)) return base;
+  const baseLevel = PERM_STRICTNESS[base] ?? 2;
+  const overrideLevel = PERM_STRICTNESS[override] ?? 2;
+  return overrideLevel >= baseLevel ? override : base;
 }
 
 // ── Factory name derivation ────────────────────────────────────────
