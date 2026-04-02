@@ -37,7 +37,7 @@ Add to your `.mcp.json`:
   "mcpServers": {
     "claude": {
       "command": "npx",
-      "args": ["claude-octopus"],
+      "args": ["claude-octopus@latest"],
       "env": {
         "CLAUDE_PERMISSION_MODE": "bypassPermissions"
       }
@@ -57,7 +57,7 @@ The real power is running several instances with different configurations:
   "mcpServers": {
     "code-reviewer": {
       "command": "npx",
-      "args": ["claude-octopus"],
+      "args": ["claude-octopus@latest"],
       "env": {
         "CLAUDE_TOOL_NAME": "code_reviewer",
         "CLAUDE_SERVER_NAME": "code-reviewer",
@@ -70,7 +70,7 @@ The real power is running several instances with different configurations:
     },
     "test-writer": {
       "command": "npx",
-      "args": ["claude-octopus"],
+      "args": ["claude-octopus@latest"],
       "env": {
         "CLAUDE_TOOL_NAME": "test_writer",
         "CLAUDE_SERVER_NAME": "test-writer",
@@ -81,7 +81,7 @@ The real power is running several instances with different configurations:
     },
     "quick-qa": {
       "command": "npx",
-      "args": ["claude-octopus"],
+      "args": ["claude-octopus@latest"],
       "env": {
         "CLAUDE_TOOL_NAME": "quick_qa",
         "CLAUDE_SERVER_NAME": "quick-qa",
@@ -106,7 +106,7 @@ Don't want to write configs by hand? Add a factory instance:
   "mcpServers": {
     "agent-factory": {
       "command": "npx",
-      "args": ["claude-octopus"],
+      "args": ["claude-octopus@latest"],
       "env": {
         "CLAUDE_FACTORY_ONLY": "true",
         "CLAUDE_SERVER_NAME": "agent-factory"
