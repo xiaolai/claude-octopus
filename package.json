@@ -1,6 +1,6 @@
 {
   "name": "claude-octopus",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "One brain, many arms — spawn multiple specialized Claude Code agents as MCP servers",
   "type": "module",
   "bin": {
