@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/claude-octopus-icon.svg" alt="Claude Octopus" width="200" />
+  <img src="https://raw.githubusercontent.com/xiaolai/claude-octopus/main/assets/claude-octopus-icon.svg" alt="Claude Octopus" width="200" />
 </p>
 
 # Claude Octopus
