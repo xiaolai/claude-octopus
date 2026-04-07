@@ -9,9 +9,7 @@
 
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
-import { readFile, writeFile, access } from "node:fs/promises";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import {
   TEMPLATES,
   getTemplate,
@@ -20,156 +18,14 @@ import {
   type Template,
   type AgentConfig,
 } from "./templates.js";
-
-// ── Types ─────────────────────────────────────────────────────────
-
-interface McpClient {
-  name: string;
-  configPath: string;
-}
-
-interface McpConfig {
-  mcpServers?: Record<string, unknown>;
-  [key: string]: unknown;
-}
-
-// ── MCP Client Detection ─────────────────────────────────────────
-
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function detectMcpClients(): Promise<McpClient[]> {
-  const home = homedir();
-  const cwd = process.cwd();
-
-  const candidates: McpClient[] = [
-    { name: "Claude Code (project)", configPath: join(cwd, ".mcp.json") },
-    { name: "Claude Desktop", configPath: join(home, ".claude", "mcp.json") },
-    { name: "Cursor", configPath: join(cwd, ".cursor", "mcp.json") },
-    { name: "Windsurf", configPath: join(cwd, ".windsurf", "mcp.json") },
-    { name: "Claude Code (user)", configPath: join(home, ".claude", "mcp.json") },
-  ];
-
-  // Deduplicate by configPath
-  const seen = new Set<string>();
-  const unique: McpClient[] = [];
-  for (const c of candidates) {
-    if (!seen.has(c.configPath)) {
-      seen.add(c.configPath);
-      unique.push(c);
-    }
-  }
-
-  const detected: McpClient[] = [];
-  for (const client of unique) {
-    if (await fileExists(client.configPath)) {
-      detected.push(client);
-    }
-  }
-  return detected;
-}
-
-// ── Config I/O ───────────────────────────────────────────────────
-
-async function readMcpConfig(path: string): Promise<McpConfig> {
-  let raw: string;
-  try {
-    raw = await readFile(path, "utf-8");
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return {};
-    throw new Error(`Cannot read ${path}: ${(err as Error).message}`);
-  }
-  try {
-    return JSON.parse(raw) as McpConfig;
-  } catch {
-    throw new Error(`${path} contains invalid JSON — fix it manually before running init`);
-  }
-}
-
-async function writeMcpConfig(path: string, config: McpConfig): Promise<void> {
-  await writeFile(path, JSON.stringify(config, null, 2) + "\n", "utf-8");
-}
-
-// ── Interactive Prompts ──────────────────────────────────────────
-
-async function choose(
-  rl: ReturnType<typeof createInterface>,
-  prompt: string,
-  options: { label: string; value: string }[],
-): Promise<string> {
-  console.log(`\n${prompt}\n`);
-  for (let i = 0; i < options.length; i++) {
-    console.log(`  ${i + 1}. ${options[i].label}`);
-  }
-  while (true) {
-    const answer = await rl.question(`\nChoice [1-${options.length}]: `);
-    const idx = parseInt(answer.trim(), 10) - 1;
-    if (idx >= 0 && idx < options.length) {
-      return options[idx].value;
-    }
-    console.log(`Please enter a number between 1 and ${options.length}.`);
-  }
-}
-
-async function confirm(
-  rl: ReturnType<typeof createInterface>,
-  prompt: string,
-): Promise<boolean> {
-  const answer = await rl.question(`${prompt} [Y/n]: `);
-  return answer.trim().toLowerCase() !== "n";
-}
-
-// ── Custom Agent Builder ─────────────────────────────────────────
-
-async function buildCustomAgent(
-  rl: ReturnType<typeof createInterface>,
-): Promise<AgentConfig> {
-  console.log("\nDescribe your custom agent:\n");
-
-  const description = await rl.question("  Description (what should it do?): ");
-  let name: string;
-  while (true) {
-    const raw = (await rl.question("  Name (kebab-case, e.g. my-agent): ")).trim();
-    if (/^[a-z0-9][a-z0-9-]*$/.test(raw) && raw.length <= 30) {
-      name = raw;
-      break;
-    }
-    console.log("    Name must be lowercase alphanumeric with hyphens, 1-30 chars.");
-  }
-
-  const toolName = name
-    .replace(/[^a-zA-Z0-9]+/g, "_")
-    .replace(/^_|_$/g, "")
-    .slice(0, 53) || "custom_agent";
-
-  const model = await choose(rl, "  Model:", [
-    { label: "Sonnet (balanced)", value: "sonnet" },
-    { label: "Opus (most capable)", value: "opus" },
-    { label: "Haiku (fastest, cheapest)", value: "haiku" },
-    { label: "Default (inherit from SDK)", value: "" },
-  ]);
-
-  const readOnly = await confirm(rl, "  Read-only (no file writes)?");
-
-  const agent: AgentConfig = {
-    serverName: name || "custom-agent",
-    toolName,
-    description: description || "Custom Claude Code agent",
-  };
-  if (model) agent.model = model;
-  if (readOnly) agent.allowedTools = "Read,Grep,Glob";
-  if (description) {
-    agent.appendPrompt = description;
-  }
-
-  return agent;
-}
+import {
+  choose,
+  confirm,
+  buildCustomAgent,
+  detectMcpClients,
+  readMcpConfig,
+  writeMcpConfig,
+} from "./cli-prompts.js";
 
 // ── Main ─────────────────────────────────────────────────────────
 
@@ -212,17 +68,17 @@ Options:
         process.exitCode = 1;
         return;
       }
-      console.log(`  Using template: ${template.name} — ${template.summary}\n`);
+      console.log(`  Using template: ${template.name} \u2014 ${template.summary}\n`);
     } else {
       const choice = await choose(
         rl,
         "Pick a template (or build your own):",
         [
           ...TEMPLATES.map((t) => ({
-            label: `${t.name} — ${t.summary}`,
+            label: `${t.name} \u2014 ${t.summary}`,
             value: t.id,
           })),
-          { label: "Custom — describe your own agent(s)", value: "custom" },
+          { label: "Custom \u2014 describe your own agent(s)", value: "custom" },
         ],
       );
 
@@ -242,7 +98,6 @@ Options:
     let targetPath: string;
 
     if (detected.length === 0) {
-      // Default to .mcp.json in cwd
       targetPath = join(process.cwd(), ".mcp.json");
       console.log(`\n  No existing MCP config detected. Will create: ${targetPath}`);
     } else if (detected.length === 1) {
@@ -281,7 +136,7 @@ Options:
     // ── Step 4: Merge and write ────────────────────────────────
 
     const existing = await readMcpConfig(targetPath);
-    const merged: McpConfig = {
+    const merged = {
       ...existing,
       mcpServers: {
         ...(existing.mcpServers || {}),
