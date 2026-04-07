@@ -105,7 +105,7 @@ export function registerFactoryTool(
       [name]: {
         command: "npx",
         args: ["claude-octopus@latest"],
-        env: displayEnv,
+        env,
       },
     };
 

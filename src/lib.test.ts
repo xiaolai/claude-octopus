@@ -280,12 +280,18 @@ describe("narrowPermissionMode", () => {
     expect(narrowPermissionMode("acceptEdits", "dontAsk")).toBe("dontAsk");
   });
 
-  it("dontAsk is the strictest — rejects all loosening", () => {
+  it("plan is the strictest — rejects all loosening", () => {
+    expect(narrowPermissionMode("plan", "bypassPermissions")).toBe("plan");
+    expect(narrowPermissionMode("plan", "acceptEdits")).toBe("plan");
+    expect(narrowPermissionMode("plan", "default")).toBe("plan");
+    expect(narrowPermissionMode("plan", "dontAsk")).toBe("plan");
+    expect(narrowPermissionMode("plan", "plan")).toBe("plan");
+  });
+
+  it("dontAsk allows tightening to plan", () => {
+    expect(narrowPermissionMode("dontAsk", "plan")).toBe("plan");
     expect(narrowPermissionMode("dontAsk", "bypassPermissions")).toBe("dontAsk");
-    expect(narrowPermissionMode("dontAsk", "acceptEdits")).toBe("dontAsk");
     expect(narrowPermissionMode("dontAsk", "default")).toBe("dontAsk");
-    expect(narrowPermissionMode("dontAsk", "plan")).toBe("dontAsk");
-    expect(narrowPermissionMode("dontAsk", "dontAsk")).toBe("dontAsk");
   });
 
   it("rejects loosening — returns base unchanged", () => {

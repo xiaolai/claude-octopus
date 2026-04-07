@@ -63,12 +63,19 @@ export async function appendTimeline(
     await mkdir(dir, { recursive: true });
     const line = JSON.stringify(entry) + "\n";
     await appendFile(timelinePath(dir), line, "utf-8");
-  } catch {
+  } catch (err) {
     // Best-effort — never fail the primary query because indexing broke.
+    console.error(`claude-octopus: timeline write failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
 // ── Reader ────────────────────────────────────────────────────────
+
+function isValidEntry(obj: unknown): obj is TimelineEntry {
+  if (typeof obj !== "object" || obj === null) return false;
+  const e = obj as Record<string, unknown>;
+  return typeof e.run_id === "string" && typeof e.agent === "string" && typeof e.session_id === "string";
+}
 
 /**
  * Parse all timeline entries, skipping malformed lines.
@@ -84,7 +91,8 @@ async function parseEntries(dir: string): Promise<TimelineEntry[]> {
   for (const line of raw.split("\n")) {
     if (!line.trim()) continue;
     try {
-      entries.push(JSON.parse(line) as TimelineEntry);
+      const parsed = JSON.parse(line);
+      if (isValidEntry(parsed)) entries.push(parsed);
     } catch {
       // Skip malformed lines — corruption tolerance.
     }
@@ -130,7 +138,7 @@ export async function listRuns(dir: string): Promise<RunSummary[]> {
       run_id,
       agents: list.map((e) => e.agent),
       t0: list[0].t0,
-      t1: list[list.length - 1].t1,
+      t1: list.reduce((max, e) => e.t1 > max ? e.t1 : max, list[0].t1),
       total_cost_usd: list.reduce((s, e) => s + e.cost_usd, 0),
       total_turns: list.reduce((s, e) => s + e.turns, 0),
       has_errors: list.some((e) => e.is_error),

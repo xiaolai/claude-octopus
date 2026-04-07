@@ -95,10 +95,12 @@ function formatTime(iso: string): string {
 }
 
 function renderMessageContent(msg: SessionMessage): string {
-  const message = msg.message as { content?: unknown; role?: string };
-  if (!message) return "<em>empty</em>";
+  const message = msg.message;
+  if (!message || typeof message !== "object") {
+    return typeof message === "string" ? esc(message) : "<em>empty</em>";
+  }
 
-  const content = message.content;
+  const content = (message as Record<string, unknown>).content;
   if (typeof content === "string") return esc(content);
 
   if (Array.isArray(content)) {

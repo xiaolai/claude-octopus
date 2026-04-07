@@ -11,7 +11,13 @@ import {
 } from "./lib.js";
 
 export function buildTimelineConfig(): TimelineConfig {
-  const dir = envStr("CLAUDE_TIMELINE_DIR") || join(homedir(), ".claude-octopus", "timelines");
+  const raw = envStr("CLAUDE_TIMELINE_DIR");
+  let dir: string;
+  if (raw) {
+    dir = raw.startsWith("~/") ? join(homedir(), raw.slice(2)) : raw === "~" ? homedir() : raw;
+  } else {
+    dir = join(homedir(), ".claude-octopus", "timelines");
+  }
   return { dir };
 }
 

@@ -132,8 +132,8 @@ const PERM_STRICTNESS: Record<string, number> = {
   bypassPermissions: 0,
   acceptEdits: 1,
   default: 2,
-  plan: 3,
-  dontAsk: 4,
+  dontAsk: 3,
+  plan: 4,
 };
 
 /**

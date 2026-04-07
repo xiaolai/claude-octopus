@@ -20,7 +20,7 @@ export function registerTimelineTool(
       "Query the cross-agent workflow timeline.",
       "No args: list all runs. run_id: show one run's agent sequence.",
       persistSession
-        ? "session_id: retrieve full transcript from Claude Code's session storage."
+        ? `session_id: retrieve timeline entry and session metadata. Use ${toolName}_transcript for full transcripts.`
         : "session_id: retrieve entry metadata (transcripts unavailable — session persistence is off).",
     ].join(" "),
     inputSchema: z.object({

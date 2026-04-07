@@ -103,9 +103,9 @@ describe("readTimeline", () => {
   it("skips malformed lines", async () => {
     const { appendFile } = await import("node:fs/promises");
     const path = join(tmpDir, "timeline.jsonl");
-    await appendFile(path, '{"run_id":"run-001","agent":"good"}\n');
+    await appendFile(path, '{"run_id":"run-001","agent":"good","session_id":"ses-1"}\n');
     await appendFile(path, "THIS IS NOT JSON\n");
-    await appendFile(path, '{"run_id":"run-001","agent":"also-good"}\n');
+    await appendFile(path, '{"run_id":"run-001","agent":"also-good","session_id":"ses-2"}\n');
     const entries = await readTimeline(tmpDir);
     expect(entries).toHaveLength(2);
   });

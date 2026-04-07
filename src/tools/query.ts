@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod/v4";
-import { resolve } from "node:path";
+import { resolve, isAbsolute } from "node:path";
 import {
   query,
   type SDKResultMessage,
@@ -13,6 +13,7 @@ import {
   narrowPermissionMode,
   buildResultPayload,
   formatErrorMessage,
+  isDescendantPath,
 } from "../lib.js";
 import { appendTimeline, type TimelineEntry } from "../timeline.js";
 
@@ -23,11 +24,14 @@ async function runQuery(
 ): Promise<SDKResultMessage> {
   const options: Options = { ...baseOptions };
 
-  // Handle cwd override — accept any path, preserve agent's base access
+  // Handle cwd override — validate relative paths, allow absolute paths
   if (overrides.cwd) {
     const baseCwd = baseOptions.cwd || process.cwd();
     const resolvedCwd = resolve(baseCwd, overrides.cwd);
-    if (resolvedCwd !== baseCwd) {
+    if (!isAbsolute(overrides.cwd) && !isDescendantPath(overrides.cwd, baseCwd)) {
+      // Relative path escapes base directory — ignore the override
+      console.error(`claude-octopus: cwd override "${overrides.cwd}" escapes base "${baseCwd}", ignoring`);
+    } else if (resolvedCwd !== baseCwd) {
       options.cwd = resolvedCwd;
       // Agent's base dir becomes an additional dir so it keeps its knowledge
       const dirs = new Set(options.additionalDirectories || []);
@@ -143,10 +147,13 @@ function formatResult(result: SDKResultMessage, runId: string) {
   };
 }
 
-function formatError(error: unknown) {
+function formatError(error: unknown, runId: string) {
   return {
     content: [
-      { type: "text" as const, text: `Error: ${formatErrorMessage(error)}` },
+      {
+        type: "text" as const,
+        text: JSON.stringify({ run_id: runId, error: formatErrorMessage(error) }, null, 2),
+      },
     ],
     isError: true,
   };
@@ -216,14 +223,24 @@ export function registerQueryTools(
   }, async ({ prompt, run_id, cwd, model, tools, disallowedTools, additionalDirs, plugins, effort, permissionMode, maxTurns, maxBudgetUsd, systemPrompt }) => {
     const runId = run_id || randomUUID();
     const t0 = new Date().toISOString();
+    const baseCwd = baseOptions.cwd || process.cwd();
+    const effectiveCwd = cwd
+      ? (isAbsolute(cwd) || isDescendantPath(cwd, baseCwd)) ? resolve(baseCwd, cwd) : baseCwd
+      : baseCwd;
     try {
       const result = await runQuery(prompt, {
         cwd, model, tools, disallowedTools, additionalDirs, plugins, effort, permissionMode, maxTurns, maxBudgetUsd, systemPrompt,
       }, baseOptions);
-      await recordTimeline(agentName, prompt, runId, t0, result, baseOptions.cwd || process.cwd(), timelineConfig);
+      await recordTimeline(agentName, prompt, runId, t0, result, effectiveCwd, timelineConfig);
       return formatResult(result, runId);
     } catch (error) {
-      return formatError(error);
+      await appendTimeline({
+        run_id: runId, agent: agentName, session_id: "", t0,
+        t1: new Date().toISOString(), cost_usd: 0, turns: 0,
+        is_error: true, subtype: "error_thrown",
+        prompt_excerpt: prompt.slice(0, 200), cwd: effectiveCwd,
+      }, timelineConfig.dir);
+      return formatError(error, runId);
     }
   });
 
@@ -246,14 +263,24 @@ export function registerQueryTools(
     }, async ({ session_id, prompt, run_id, cwd, model, maxTurns, maxBudgetUsd }) => {
       const runId = run_id || randomUUID();
       const t0 = new Date().toISOString();
+      const baseCwd = baseOptions.cwd || process.cwd();
+      const effectiveCwd = cwd
+        ? (isAbsolute(cwd) || isDescendantPath(cwd, baseCwd)) ? resolve(baseCwd, cwd) : baseCwd
+        : baseCwd;
       try {
         const result = await runQuery(prompt, {
           cwd, model, maxTurns, maxBudgetUsd, resumeSessionId: session_id,
         }, baseOptions);
-        await recordTimeline(agentName, prompt, runId, t0, result, baseOptions.cwd || process.cwd(), timelineConfig);
+        await recordTimeline(agentName, prompt, runId, t0, result, effectiveCwd, timelineConfig);
         return formatResult(result, runId);
       } catch (error) {
-        return formatError(error);
+        await appendTimeline({
+          run_id: runId, agent: agentName, session_id: session_id || "", t0,
+          t1: new Date().toISOString(), cost_usd: 0, turns: 0,
+          is_error: true, subtype: "error_thrown",
+          prompt_excerpt: prompt.slice(0, 200), cwd: effectiveCwd,
+        }, timelineConfig.dir);
+        return formatError(error, runId);
       }
     });
   }
