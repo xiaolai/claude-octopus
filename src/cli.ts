@@ -1,7 +1,5 @@
-#!/usr/bin/env node
-
 /**
- * CLI entry point for non-MCP commands.
+ * CLI report command.
  *
  * Usage:
  *   claude-octopus report [run_id] [--out file.html] [--no-transcripts]
@@ -15,38 +13,26 @@ import { generateReport } from "./report.js";
 function usage(): never {
   console.error(`Usage:
   claude-octopus report [run_id] [--out file.html] [--no-transcripts]
-  claude-octopus report --list
 
 Options:
   run_id             Generate detailed report for this run
-  --list             List all runs (default when no run_id)
+  (no run_id)        List all runs (default)
   --out <file>       Write to file instead of stdout
   --no-transcripts   Omit session transcripts from the report
+  --help             Show this help
 `);
   process.exit(1);
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-
-  if (args.length === 0 || args[0] !== "report") {
-    // Not a CLI command — this binary is for "report" only.
-    // The MCP server is the default entry point (dist/index.js).
-    console.error("Unknown command. Available commands: report");
-    console.error("For the MCP server, use: npx claude-octopus (without arguments)");
-    process.exit(1);
-  }
-
-  // Parse args after "report"
-  const reportArgs = args.slice(1);
+export function runReportCli(args: string[]): void {
   let runId: string | undefined;
   let outFile: string | undefined;
   let includeTranscripts = true;
 
-  for (let i = 0; i < reportArgs.length; i++) {
-    const arg = reportArgs[i];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
     if (arg === "--out" || arg === "-o") {
-      outFile = reportArgs[++i];
+      outFile = args[++i];
       if (!outFile) usage();
     } else if (arg === "--no-transcripts") {
       includeTranscripts = false;
@@ -64,21 +50,21 @@ async function main() {
 
   const timeline = buildTimelineConfig();
 
-  const html = await generateReport({
+  generateReport({
     timelineDir: timeline.dir,
     runId,
     includeTranscripts,
-  });
-
-  if (outFile) {
-    await writeFile(outFile, html, "utf-8");
-    console.error(`Report written to ${outFile}`);
-  } else {
-    process.stdout.write(html);
-  }
+  })
+    .then((html) => {
+      if (outFile) {
+        return writeFile(outFile, html, "utf-8").then(() => {
+          console.error(`Report written to ${outFile}`);
+        });
+      }
+      process.stdout.write(html);
+    })
+    .catch((error) => {
+      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      process.exit(1);
+    });
 }
-
-main().catch((error) => {
-  console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-  process.exit(1);
-});

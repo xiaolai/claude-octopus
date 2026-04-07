@@ -46,7 +46,17 @@ Add to your `.mcp.json`:
 }
 ```
 
-This gives you two tools: `claude_code` and `claude_code_reply`. That's it — you have Claude Code as a tool.
+This gives you five tools:
+
+| Tool | Purpose |
+|------|---------|
+| `claude_code` | Send a task, get a result |
+| `claude_code_reply` | Continue a conversation |
+| `claude_code_timeline` | Query the workflow timeline |
+| `claude_code_transcript` | Read full session transcripts |
+| `claude_code_report` | Generate HTML reports |
+
+That's it — you have Claude Code as a tool, with full workflow observability built in.
 
 ## Multiple Agents
 
@@ -95,7 +105,32 @@ The real power is running several instances with different configurations:
 }
 ```
 
-Your MCP client now sees three distinct tools — `code_reviewer`, `test_writer`, `quick_qa` — each purpose-built.
+Your MCP client now sees distinct tools for each agent — `code_reviewer`, `test_writer`, `quick_qa` — each purpose-built.
+
+## Multi-Agent Orchestration
+
+Agents can coordinate through a **coordinator pattern**: one agent has the others as inner MCP tools via `CLAUDE_MCP_SERVERS`, and its system prompt drives the pipeline.
+
+```json
+{
+  "mcpServers": {
+    "publishing-house": {
+      "command": "npx",
+      "args": ["claude-octopus@latest"],
+      "env": {
+        "CLAUDE_TOOL_NAME": "publishing_house",
+        "CLAUDE_SERVER_NAME": "publishing-house",
+        "CLAUDE_MODEL": "opus",
+        "CLAUDE_PERMISSION_MODE": "bypassPermissions",
+        "CLAUDE_APPEND_PROMPT": "You are a publishing house coordinator. Dispatch tasks to your specialist agents and drive the pipeline to completion.",
+        "CLAUDE_MCP_SERVERS": "{\"researcher\":{\"command\":\"npx\",\"args\":[\"claude-octopus@latest\"],\"env\":{\"CLAUDE_TOOL_NAME\":\"researcher\",\"CLAUDE_SERVER_NAME\":\"researcher\",\"CLAUDE_MODEL\":\"sonnet\",\"CLAUDE_PERMISSION_MODE\":\"bypassPermissions\"}},\"architect\":{\"command\":\"npx\",\"args\":[\"claude-octopus@latest\"],\"env\":{\"CLAUDE_TOOL_NAME\":\"architect\",\"CLAUDE_SERVER_NAME\":\"architect\",\"CLAUDE_MODEL\":\"opus\",\"CLAUDE_PERMISSION_MODE\":\"bypassPermissions\"}}}"
+      }
+    }
+  }
+}
+```
+
+The coordinator agent autonomously calls `researcher`, `architect`, etc. as MCP tools — fully autonomous, no human in the loop until it finishes. Every invocation is tracked in the shared timeline.
 
 ## Agent Factory
 
@@ -124,99 +159,54 @@ In factory-only mode, no query tools are registered — just the wizard. This ke
 
 Each non-factory instance exposes:
 
-| Tool                | Purpose                                                          |
-| ------------------- | ---------------------------------------------------------------- |
-| `<name>`            | Send a task to the agent, get a response + `session_id`          |
-| `<name>_reply`      | Continue a previous conversation by `session_id`                 |
-| `<name>_timeline`   | Query the cross-agent workflow timeline                          |
-| `<name>_transcript` | Retrieve full session transcript from Claude Code's storage      |
-| `<name>_report`     | Generate a self-contained HTML report for a run or all runs      |
+| Tool | Purpose |
+|------|---------|
+| `<name>` | Send a task to the agent, get a response + `session_id` + `run_id` |
+| `<name>_reply` | Continue a previous conversation by `session_id` |
+| `<name>_timeline` | Query the cross-agent workflow timeline |
+| `<name>_transcript` | Retrieve full session transcript from Claude Code's storage |
+| `<name>_report` | Generate a self-contained HTML report for a run or all runs |
 
-Per-invocation parameters (override server defaults):
+### Query and reply parameters
 
-| Parameter         | Description                                     |
-| ----------------- | ----------------------------------------------- |
-| `prompt`          | The task or question (required)                 |
-| `run_id`          | Workflow run ID — groups related agent calls into one timeline. Auto-generated if omitted. |
-| `cwd`             | Working directory override                      |
-| `model`           | Model override                                  |
-| `tools`           | Restrict available tools (intersects with server restriction) |
+| Parameter | Description |
+|-----------|-------------|
+| `prompt` | The task or question (required) |
+| `run_id` | Workflow run ID — groups related agent calls into one timeline. Auto-generated if omitted; returned in every response for propagation. |
+| `cwd` | Working directory override |
+| `model` | Model override (`sonnet`, `opus`, `haiku`, or full ID) |
+| `tools` | Restrict available tools (intersects with server restriction) |
 | `disallowedTools` | Block additional tools (unions with server blacklist) |
-| `additionalDirs`  | Extra directories the agent can access           |
-| `plugins`         | Additional plugin paths to load                  |
-| `effort`          | Thinking effort (`low`, `medium`, `high`, `max`) |
-| `permissionMode`  | Permission mode (can only tighten, never loosen) |
-| `maxTurns`        | Max conversation turns                          |
-| `maxBudgetUsd`    | Max spend in USD                                |
-| `systemPrompt`    | Additional prompt (appended to server default)  |
-
-## Configuration
-
-All configuration is via environment variables in `.mcp.json`. Every env var is optional.
-
-### Identity
-
-| Env Var               | Description                                    | Default          |
-| --------------------- | ---------------------------------------------- | ---------------- |
-| `CLAUDE_TOOL_NAME`    | Tool name prefix (`<name>`, `<name>_reply`, `<name>_timeline`, `<name>_transcript`) | `claude_code`    |
-| `CLAUDE_DESCRIPTION`  | Tool description shown to the host AI          | generic          |
-| `CLAUDE_SERVER_NAME`  | MCP server name in protocol handshake          | `claude-octopus` |
-| `CLAUDE_FACTORY_ONLY` | Only expose the factory wizard tool            | `false`          |
-
-### Agent
-
-| Env Var                   | Description                                           | Default         |
-| ------------------------- | ----------------------------------------------------- | --------------- |
-| `CLAUDE_MODEL`            | Model (`sonnet`, `opus`, `haiku`, or full ID)         | SDK default     |
-| `CLAUDE_CWD`              | Working directory                                     | `process.cwd()` |
-| `CLAUDE_PERMISSION_MODE`  | `default`, `acceptEdits`, `bypassPermissions`, `plan` | `default`       |
-| `CLAUDE_ALLOWED_TOOLS`    | Comma-separated tool restriction (available tools)    | all             |
-| `CLAUDE_DISALLOWED_TOOLS` | Comma-separated tool blacklist                        | none            |
-| `CLAUDE_MAX_TURNS`        | Max conversation turns                                | unlimited       |
-| `CLAUDE_MAX_BUDGET_USD`   | Max spend per invocation                              | unlimited       |
-| `CLAUDE_EFFORT`           | `low`, `medium`, `high`, `max`                        | SDK default     |
-
-### Prompts
-
-| Env Var                | Description                                            |
-| ---------------------- | ------------------------------------------------------ |
-| `CLAUDE_SYSTEM_PROMPT` | Replaces the default Claude Code system prompt         |
-| `CLAUDE_APPEND_PROMPT` | Appended to the default prompt (usually what you want) |
-
-### Advanced
-
-| Env Var                  | Description                                              |
-| ------------------------ | -------------------------------------------------------- |
-| `CLAUDE_ADDITIONAL_DIRS` | Extra directories to grant access (comma-separated)      |
-| `CLAUDE_PLUGINS`         | Local plugin paths (comma-separated)                     |
-| `CLAUDE_MCP_SERVERS`     | MCP servers for the inner agent (JSON)                   |
-| `CLAUDE_PERSIST_SESSION` | `true`/`false` — enable session resume (default: `true`) |
-| `CLAUDE_SETTING_SOURCES` | Settings to load: `user`, `project`, `local`             |
-| `CLAUDE_SETTINGS`        | Path to settings JSON or inline JSON                     |
-| `CLAUDE_BETAS`           | Beta features (comma-separated)                          |
-
-### Timeline
-
-| Env Var              | Description                                              | Default                          |
-| -------------------- | -------------------------------------------------------- | -------------------------------- |
-| `CLAUDE_TIMELINE_DIR` | Directory for the cross-agent timeline index            | `~/.claude-octopus/timelines`    |
-
-### Authentication
-
-| Env Var                   | Description                            | Default               |
-| ------------------------- | -------------------------------------- | --------------------- |
-| `ANTHROPIC_API_KEY`       | Anthropic API key for this agent       | inherited from parent |
-| `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code OAuth token for this agent | inherited from parent |
-
-Leave both unset to inherit auth from the parent process. Set one per agent to use a different account or billing source.
-
-Lists accept JSON arrays when values contain commas: `["path,with,comma", "/normal"]`
+| `additionalDirs` | Extra directories the agent can access |
+| `plugins` | Additional plugin paths to load |
+| `effort` | Thinking effort (`low`, `medium`, `high`, `max`) |
+| `permissionMode` | Permission mode (can only tighten, never loosen) |
+| `maxTurns` | Max conversation turns |
+| `maxBudgetUsd` | Max spend in USD |
+| `systemPrompt` | Additional prompt (appended to server default) |
 
 ## Timeline
 
-Every agent invocation is recorded in a lightweight JSONL index at `~/.claude-octopus/timelines/timeline.jsonl`. This solves the correlation problem: when multiple agents participate in a workflow, the timeline tracks which sessions belong to the same run, in what order they executed, and what role each played.
+Every agent invocation is recorded in a lightweight JSONL index at `~/.claude-octopus/timelines/timeline.jsonl`. This solves the multi-agent correlation problem: when several agents participate in a workflow, the timeline tracks which sessions belong to the same run, in what order they executed, and what role each played.
 
 Full session transcripts stay in Claude Code's own storage (`~/.claude/projects/`). The timeline is just the table of contents — ~200 bytes per entry — that cross-references via `session_id`.
+
+```mermaid
+graph TB
+    subgraph "Timeline Index (~200 bytes/entry)"
+        TL["~/.claude-octopus/timelines/timeline.jsonl"]
+    end
+
+    subgraph "Claude Code Session Storage (full transcripts)"
+        S1["~/.claude/projects/.../ses-aaa.jsonl"]
+        S2["~/.claude/projects/.../ses-bbb.jsonl"]
+        S3["~/.claude/projects/.../ses-ccc.jsonl"]
+    end
+
+    TL -->|"session_id cross-ref"| S1
+    TL -->|"session_id cross-ref"| S2
+    TL -->|"session_id cross-ref"| S3
+```
 
 ### How it works
 
@@ -263,77 +253,153 @@ Later: researcher_transcript({ session_id: "ses-aaa" })
        → full conversation transcript from Claude Code's storage
 ```
 
-### HTML reports
+## HTML Reports
 
-Generate a self-contained HTML report with agent sequence, cost breakdown, and collapsible transcripts.
+Generate self-contained HTML reports with agent sequence visualization, cost breakdown, and collapsible transcripts. Dark theme, no external dependencies — one file, open in any browser.
 
-**Via MCP tool:**
+### Via MCP tool
+
 ```
-<name>_report({})                        # list all runs
+<name>_report({})                        # index of all runs
 <name>_report({ run_id: "pub-001" })     # detailed report for one run
 ```
 
-**Via CLI:**
+### Via CLI
+
 ```bash
-# List all runs
-npx claude-octopus-report report --list --out index.html
+# Index of all runs
+npx claude-octopus report --out index.html
 
 # Detailed report for one run
-npx claude-octopus-report report pub-001 --out report.html
+npx claude-octopus report pub-001 --out report.html
 open report.html
 
 # Without transcripts (faster, smaller file)
-npx claude-octopus-report report pub-001 --no-transcripts --out report.html
+npx claude-octopus report pub-001 --no-transcripts --out report.html
+
+# To stdout (pipe-friendly)
+npx claude-octopus report pub-001 > report.html
 ```
+
+### What's in the report
+
+- **Run summary** — agent count, total cost, duration, total turns
+- **Timeline bar** — numbered dots for each agent (green = success, red = error)
+- **Agent cards** — timing, cost, turns, session ID, prompt excerpt
+- **Collapsible transcripts** — full tool calls, reasoning, and results per agent
+
+## Configuration
+
+All configuration is via environment variables in `.mcp.json`. Every env var is optional.
+
+### Identity
+
+| Env Var | Description | Default |
+|---------|-------------|---------|
+| `CLAUDE_TOOL_NAME` | Tool name prefix (generates `<name>`, `<name>_reply`, `<name>_timeline`, `<name>_transcript`, `<name>_report`) | `claude_code` |
+| `CLAUDE_DESCRIPTION` | Tool description shown to the host AI | generic |
+| `CLAUDE_SERVER_NAME` | MCP server name in protocol handshake | `claude-octopus` |
+| `CLAUDE_FACTORY_ONLY` | Only expose the factory wizard tool | `false` |
+
+### Agent
+
+| Env Var | Description | Default |
+|---------|-------------|---------|
+| `CLAUDE_MODEL` | Model (`sonnet`, `opus`, `haiku`, or full ID) | SDK default |
+| `CLAUDE_CWD` | Working directory | `process.cwd()` |
+| `CLAUDE_PERMISSION_MODE` | `default`, `acceptEdits`, `bypassPermissions`, `plan` | `default` |
+| `CLAUDE_ALLOWED_TOOLS` | Comma-separated tool restriction (available tools) | all |
+| `CLAUDE_DISALLOWED_TOOLS` | Comma-separated tool blacklist | none |
+| `CLAUDE_MAX_TURNS` | Max conversation turns | unlimited |
+| `CLAUDE_MAX_BUDGET_USD` | Max spend per invocation | unlimited |
+| `CLAUDE_EFFORT` | `low`, `medium`, `high`, `max` | SDK default |
+
+### Prompts
+
+| Env Var | Description |
+|---------|-------------|
+| `CLAUDE_SYSTEM_PROMPT` | Replaces the default Claude Code system prompt |
+| `CLAUDE_APPEND_PROMPT` | Appended to the default prompt (usually what you want) |
+
+### Advanced
+
+| Env Var | Description |
+|---------|-------------|
+| `CLAUDE_ADDITIONAL_DIRS` | Extra directories to grant access (comma-separated) |
+| `CLAUDE_PLUGINS` | Local plugin paths (comma-separated) |
+| `CLAUDE_MCP_SERVERS` | MCP servers for the inner agent (JSON) |
+| `CLAUDE_PERSIST_SESSION` | `true`/`false` — enable session resume (default: `true`) |
+| `CLAUDE_SETTING_SOURCES` | Settings to load: `user`, `project`, `local` |
+| `CLAUDE_SETTINGS` | Path to settings JSON or inline JSON |
+| `CLAUDE_BETAS` | Beta features (comma-separated) |
+
+### Timeline
+
+| Env Var | Description | Default |
+|---------|-------------|---------|
+| `CLAUDE_TIMELINE_DIR` | Directory for the cross-agent timeline index | `~/.claude-octopus/timelines` |
+
+### Authentication
+
+| Env Var | Description | Default |
+|---------|-------------|---------|
+| `ANTHROPIC_API_KEY` | Anthropic API key for this agent | inherited from parent |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code OAuth token for this agent | inherited from parent |
+
+Leave both unset to inherit auth from the parent process. Set one per agent to use a different account or billing source.
+
+Lists accept JSON arrays when values contain commas: `["path,with,comma", "/normal"]`
 
 ## Security
 
-- **Permission mode defaults to ****`default`** — tool executions prompt for approval unless you explicitly set `bypassPermissions`.
+- **Permission mode defaults to `default`** — tool executions prompt for approval unless you explicitly set `bypassPermissions`.
 - **`cwd` overrides preserve agent knowledge** — when the host overrides `cwd`, the agent's configured base directory is automatically added to `additionalDirectories` so it retains access to its own context.
 - **Tool restrictions narrow, never widen** — per-invocation `tools` intersects with the server restriction (can only remove tools, not add). `disallowedTools` unions (can only block more).
-- **`_reply`**** and `_transcript` tools respect persistence** — not registered when `CLAUDE_PERSIST_SESSION=false`.
+- **`_reply` and `_transcript` tools respect persistence** — not registered when `CLAUDE_PERSIST_SESSION=false`.
 - **Timeline writes are best-effort** — a failed timeline append never blocks or fails the primary query.
 
 ## Architecture
 
-```
-┌─────────────────────────────────┐
-│  MCP Client                     │
-│  (Claude Desktop, Cursor, etc.) │
-│                                 │
-│  Sees: code_reviewer,           │
-│        test_writer, quick_qa    │
-└──────────┬──────────────────────┘
-           │ JSON-RPC / stdio
-┌──────────▼──────────────────────┐
-│  Claude Octopus (per instance)  │
-│                                 │
-│  Env: CLAUDE_MODEL=opus         │
-│       CLAUDE_ALLOWED_TOOLS=...  │
-│       CLAUDE_APPEND_PROMPT=...  │
-│                                 │
-│  Calls: Agent SDK query()       │
-└──────────┬──────────────────────┘
-           │ in-process
-┌──────────▼──────────────────────┐
-│  Claude Agent SDK               │
-│  Runs autonomously: reads files,│
-│  writes code, runs commands     │
-│  Returns result + session_id    │
-└─────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph "MCP Client (Claude Desktop, Cursor, etc.)"
+        C["Sees: code_reviewer, test_writer, quick_qa"]
+    end
+
+    C -->|"JSON-RPC / stdio"| O1
+    C -->|"JSON-RPC / stdio"| O2
+    C -->|"JSON-RPC / stdio"| O3
+
+    subgraph "Claude Octopus Instances"
+        O1["code-reviewer<br/>model=opus, tools=Read,Grep,Glob"]
+        O2["test-writer<br/>model=sonnet"]
+        O3["quick-qa<br/>model=haiku, budget=$0.02"]
+    end
+
+    O1 -->|"Agent SDK query()"| SDK["Claude Agent SDK"]
+    O2 -->|"Agent SDK query()"| SDK
+    O3 -->|"Agent SDK query()"| SDK
+
+    O1 -->|"append"| TL["Timeline Index<br/>~/.claude-octopus/timelines/"]
+    O2 -->|"append"| TL
+    O3 -->|"append"| TL
+
+    SDK -->|"persist"| SS["Session Storage<br/>~/.claude/projects/"]
+    TL -.->|"cross-ref"| SS
 ```
 
 ## How It Compares
 
-| Feature             | ``         | [claude-code-mcp](https://github.com/steipete/claude-code-mcp) | **Claude Octopus** |
-| ------------------- | ------------ | -------------------------------------------------------------- | ------------------ |
-| Approach            | Built-in     | CLI wrapping                                                   | Agent SDK          |
-| Exposes             | 16 raw tools | 1 prompt tool                                                  | prompt + reply + timeline + transcript |
-| Multi-instance      | No           | No                                                             | Yes                |
-| Per-instance config | No           | No                                                             | Yes (19 env vars)  |
-| Factory wizard      | No           | No                                                             | Yes                |
-| Session continuity  | No           | No                                                             | Yes                |
-| Cross-agent timeline| No           | No                                                             | Yes                |
+| Feature | Built-in `claude` | [claude-code-mcp](https://github.com/steipete/claude-code-mcp) | **Claude Octopus** |
+|---------|-------------------|----------------------------------------------------------------|--------------------|
+| Approach | Built-in | CLI wrapping | Agent SDK |
+| Tools per instance | 16 raw tools | 1 prompt tool | 5 (prompt, reply, timeline, transcript, report) |
+| Multi-instance | No | No | Yes |
+| Per-instance config | No | No | Yes (20 env vars) |
+| Factory wizard | No | No | Yes |
+| Session continuity | No | No | Yes |
+| Cross-agent timeline | No | No | Yes |
+| HTML reports | No | No | Yes |
 
 ## Development
 

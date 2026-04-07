@@ -5,8 +5,7 @@
   "mcpName": "io.github.xiaolai/claude-octopus",
   "type": "module",
   "bin": {
-    "claude-octopus": "dist/index.js",
-    "claude-octopus-report": "dist/cli.js"
+    "claude-octopus": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",
