@@ -18,14 +18,21 @@ import { registerTimelineTool } from "./tools/timeline.js";
 import { registerReportTool } from "./tools/report.js";
 import { registerFactoryTool } from "./tools/factory.js";
 import { runReportCli } from "./cli.js";
+import { runInitCli } from "./init.js";
+import { runDashboardCli } from "./dashboard.js";
 
 const require = createRequire(import.meta.url);
 const { version: PKG_VERSION } = require("../package.json");
 
 // ── Subcommand routing ────────────────────────────────────────────
 
-if (process.argv[2] === "report") {
+const subcommand = process.argv[2];
+if (subcommand === "report") {
   runReportCli(process.argv.slice(3));
+} else if (subcommand === "init") {
+  runInitCli(process.argv.slice(3));
+} else if (subcommand === "dashboard") {
+  runDashboardCli(process.argv.slice(3));
 } else {
   startMcpServer();
 }
