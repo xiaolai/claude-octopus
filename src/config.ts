@@ -1,4 +1,6 @@
-import type { Options } from "./types.js";
+import { join } from "node:path";
+import { homedir } from "node:os";
+import type { Options, OctopusConfig, TimelineConfig } from "./types.js";
 import {
   envStr,
   envList,
@@ -7,6 +9,18 @@ import {
   envJson,
   validatePermissionMode,
 } from "./lib.js";
+
+export function buildTimelineConfig(): TimelineConfig {
+  const dir = envStr("CLAUDE_TIMELINE_DIR") || join(homedir(), ".claude-octopus", "timelines");
+  return { dir };
+}
+
+export function buildOctopusConfig(): OctopusConfig {
+  return {
+    sdkOptions: buildBaseOptions(),
+    timeline: buildTimelineConfig(),
+  };
+}
 
 export function buildBaseOptions(): Options {
   const opts: Options = {

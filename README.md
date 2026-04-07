@@ -124,16 +124,19 @@ In factory-only mode, no query tools are registered — just the wizard. This ke
 
 Each non-factory instance exposes:
 
-| Tool           | Purpose                                                 |
-| -------------- | ------------------------------------------------------- |
-| `<name>`       | Send a task to the agent, get a response + `session_id` |
-| `<name>_reply` | Continue a previous conversation by `session_id`        |
+| Tool                | Purpose                                                          |
+| ------------------- | ---------------------------------------------------------------- |
+| `<name>`            | Send a task to the agent, get a response + `session_id`          |
+| `<name>_reply`      | Continue a previous conversation by `session_id`                 |
+| `<name>_timeline`   | Query the cross-agent workflow timeline                          |
+| `<name>_transcript` | Retrieve full session transcript from Claude Code's storage      |
 
 Per-invocation parameters (override server defaults):
 
 | Parameter         | Description                                     |
 | ----------------- | ----------------------------------------------- |
 | `prompt`          | The task or question (required)                 |
+| `run_id`          | Workflow run ID — groups related agent calls into one timeline. Auto-generated if omitted. |
 | `cwd`             | Working directory override                      |
 | `model`           | Model override                                  |
 | `tools`           | Restrict available tools (intersects with server restriction) |
@@ -154,7 +157,7 @@ All configuration is via environment variables in `.mcp.json`. Every env var is 
 
 | Env Var               | Description                                    | Default          |
 | --------------------- | ---------------------------------------------- | ---------------- |
-| `CLAUDE_TOOL_NAME`    | Tool name prefix (`<name>` and `<name>_reply`) | `claude_code`    |
+| `CLAUDE_TOOL_NAME`    | Tool name prefix (`<name>`, `<name>_reply`, `<name>_timeline`, `<name>_transcript`) | `claude_code`    |
 | `CLAUDE_DESCRIPTION`  | Tool description shown to the host AI          | generic          |
 | `CLAUDE_SERVER_NAME`  | MCP server name in protocol handshake          | `claude-octopus` |
 | `CLAUDE_FACTORY_ONLY` | Only expose the factory wizard tool            | `false`          |
@@ -191,6 +194,12 @@ All configuration is via environment variables in `.mcp.json`. Every env var is 
 | `CLAUDE_SETTINGS`        | Path to settings JSON or inline JSON                     |
 | `CLAUDE_BETAS`           | Beta features (comma-separated)                          |
 
+### Timeline
+
+| Env Var              | Description                                              | Default                          |
+| -------------------- | -------------------------------------------------------- | -------------------------------- |
+| `CLAUDE_TIMELINE_DIR` | Directory for the cross-agent timeline index            | `~/.claude-octopus/timelines`    |
+
 ### Authentication
 
 | Env Var                   | Description                            | Default               |
@@ -202,12 +211,64 @@ Leave both unset to inherit auth from the parent process. Set one per agent to u
 
 Lists accept JSON arrays when values contain commas: `["path,with,comma", "/normal"]`
 
+## Timeline
+
+Every agent invocation is recorded in a lightweight JSONL index at `~/.claude-octopus/timelines/timeline.jsonl`. This solves the correlation problem: when multiple agents participate in a workflow, the timeline tracks which sessions belong to the same run, in what order they executed, and what role each played.
+
+Full session transcripts stay in Claude Code's own storage (`~/.claude/projects/`). The timeline is just the table of contents — ~200 bytes per entry — that cross-references via `session_id`.
+
+### How it works
+
+1. Every `<name>` and `<name>_reply` call appends one line to the timeline
+2. If you pass `run_id`, all agents sharing the same `run_id` are grouped into one run
+3. If you omit `run_id`, one is auto-generated and returned in the response — pass it to subsequent agents to keep them grouped
+
+### Querying the timeline
+
+```
+# List all runs
+<name>_timeline({})
+
+# Show one run's agent sequence
+<name>_timeline({ run_id: "abc-123" })
+
+# Look up a specific session
+<name>_timeline({ session_id: "ses-xyz" })
+
+# Retrieve full transcript (separate tool)
+<name>_transcript({ session_id: "ses-xyz" })
+```
+
+### Multi-agent workflow example
+
+```
+Host:  researcher({ prompt: "Research X", run_id: "pub-001" })
+       → { run_id: "pub-001", session_id: "ses-aaa", result: "..." }
+
+Host:  architect({ prompt: "Structure based on...", run_id: "pub-001" })
+       → { run_id: "pub-001", session_id: "ses-bbb", result: "..." }
+
+Host:  verifier({ prompt: "Check this plan", run_id: "pub-001" })
+       → { run_id: "pub-001", session_id: "ses-ccc", result: "..." }
+
+Later: researcher_timeline({ run_id: "pub-001" })
+       → [
+           { agent: "researcher", session_id: "ses-aaa", cost: 0.05, turns: 4 },
+           { agent: "architect",  session_id: "ses-bbb", cost: 0.08, turns: 6 },
+           { agent: "verifier",   session_id: "ses-ccc", cost: 0.03, turns: 3 },
+         ]
+
+Later: researcher_transcript({ session_id: "ses-aaa" })
+       → full conversation transcript from Claude Code's storage
+```
+
 ## Security
 
 - **Permission mode defaults to ****`default`** — tool executions prompt for approval unless you explicitly set `bypassPermissions`.
 - **`cwd` overrides preserve agent knowledge** — when the host overrides `cwd`, the agent's configured base directory is automatically added to `additionalDirectories` so it retains access to its own context.
 - **Tool restrictions narrow, never widen** — per-invocation `tools` intersects with the server restriction (can only remove tools, not add). `disallowedTools` unions (can only block more).
-- **`_reply`**** tool respects persistence** — not registered when `CLAUDE_PERSIST_SESSION=false`.
+- **`_reply`**** and `_transcript` tools respect persistence** — not registered when `CLAUDE_PERSIST_SESSION=false`.
+- **Timeline writes are best-effort** — a failed timeline append never blocks or fails the primary query.
 
 ## Architecture
 
@@ -243,11 +304,12 @@ Lists accept JSON arrays when values contain commas: `["path,with,comma", "/norm
 | Feature             | ``         | [claude-code-mcp](https://github.com/steipete/claude-code-mcp) | **Claude Octopus** |
 | ------------------- | ------------ | -------------------------------------------------------------- | ------------------ |
 | Approach            | Built-in     | CLI wrapping                                                   | Agent SDK          |
-| Exposes             | 16 raw tools | 1 prompt tool                                                  | 1 prompt + reply   |
+| Exposes             | 16 raw tools | 1 prompt tool                                                  | prompt + reply + timeline + transcript |
 | Multi-instance      | No           | No                                                             | Yes                |
-| Per-instance config | No           | No                                                             | Yes (18 env vars)  |
+| Per-instance config | No           | No                                                             | Yes (19 env vars)  |
 | Factory wizard      | No           | No                                                             | Yes                |
 | Session continuity  | No           | No                                                             | Yes                |
+| Cross-agent timeline| No           | No                                                             | Yes                |
 
 ## Development
 

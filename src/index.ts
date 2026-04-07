@@ -14,8 +14,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createRequire } from "node:module";
 import { envStr, envBool, sanitizeToolName } from "./lib.js";
-import { buildBaseOptions } from "./config.js";
+import { buildOctopusConfig } from "./config.js";
 import { registerQueryTools } from "./tools/query.js";
+import { registerTimelineTool } from "./tools/timeline.js";
 import { registerFactoryTool } from "./tools/factory.js";
 
 const require = createRequire(import.meta.url);
@@ -23,10 +24,11 @@ const { version: PKG_VERSION } = require("../package.json");
 
 // ── Configuration ──────────────────────────────────────────────────
 
-const BASE_OPTIONS = buildBaseOptions();
+const CONFIG = buildOctopusConfig();
 
 const TOOL_NAME = sanitizeToolName(envStr("CLAUDE_TOOL_NAME") || "claude_code");
 const REPLY_TOOL_NAME = `${TOOL_NAME}_reply`;
+const TIMELINE_TOOL_NAME = `${TOOL_NAME}_timeline`;
 const SERVER_NAME = envStr("CLAUDE_SERVER_NAME") || "claude-octopus";
 const FACTORY_ONLY = envBool("CLAUDE_FACTORY_ONLY", false);
 
@@ -44,7 +46,20 @@ const TOOL_DESCRIPTION = envStr("CLAUDE_DESCRIPTION") || DEFAULT_DESCRIPTION;
 const server = new McpServer({ name: SERVER_NAME, version: PKG_VERSION });
 
 if (!FACTORY_ONLY) {
-  registerQueryTools(server, BASE_OPTIONS, TOOL_NAME, TOOL_DESCRIPTION);
+  registerQueryTools(
+    server,
+    CONFIG.sdkOptions,
+    TOOL_NAME,
+    TOOL_DESCRIPTION,
+    SERVER_NAME,
+    CONFIG.timeline,
+  );
+  registerTimelineTool(
+    server,
+    TOOL_NAME,
+    CONFIG.timeline,
+    CONFIG.sdkOptions.persistSession !== false,
+  );
 }
 
 if (FACTORY_ONLY) {
@@ -58,9 +73,12 @@ async function main() {
   await server.connect(transport);
   const toolList = FACTORY_ONLY
     ? ["create_claude_code_mcp"]
-    : BASE_OPTIONS.persistSession !== false
-      ? [TOOL_NAME, REPLY_TOOL_NAME]
-      : [TOOL_NAME];
+    : [
+        TOOL_NAME,
+        ...(CONFIG.sdkOptions.persistSession !== false ? [REPLY_TOOL_NAME] : []),
+        TIMELINE_TOOL_NAME,
+        ...(CONFIG.sdkOptions.persistSession !== false ? [`${TOOL_NAME}_transcript`] : []),
+      ];
   console.error(`${SERVER_NAME}: running on stdio (tools: ${toolList.join(", ")})`);
 }
 

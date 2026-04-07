@@ -69,6 +69,7 @@ export function registerFactoryTool(
       betas: z.array(z.string()).optional(),
       apiKey: z.string().optional().describe("Anthropic API key for this agent (leave unset to inherit)"),
       oauthToken: z.string().optional().describe("Claude Code OAuth token for this agent (leave unset to inherit)"),
+      timelineDir: z.string().optional().describe("Directory for the cross-agent timeline index (default: ~/.claude-octopus/timelines)"),
     }),
   }, async (params) => {
     const { description, name: nameParam, toolName: toolNameParam } = params;

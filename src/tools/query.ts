@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod/v4";
 import { resolve } from "node:path";
@@ -5,7 +6,7 @@ import {
   query,
   type SDKResultMessage,
 } from "@anthropic-ai/claude-agent-sdk";
-import type { Options, InvocationOverrides } from "../types.js";
+import type { Options, InvocationOverrides, TimelineConfig } from "../types.js";
 import {
   mergeTools,
   mergeDisallowedTools,
@@ -13,6 +14,7 @@ import {
   buildResultPayload,
   formatErrorMessage,
 } from "../lib.js";
+import { appendTimeline, type TimelineEntry } from "../timeline.js";
 
 async function runQuery(
   prompt: string,
@@ -128,9 +130,10 @@ async function runQuery(
   return result;
 }
 
-function formatResult(result: SDKResultMessage) {
+function formatResult(result: SDKResultMessage, runId: string) {
   const payload = buildResultPayload(
-    result as Parameters<typeof buildResultPayload>[0]
+    result as Parameters<typeof buildResultPayload>[0],
+    runId,
   );
   return {
     content: [
@@ -149,11 +152,47 @@ function formatError(error: unknown) {
   };
 }
 
+/**
+ * Build and append a timeline entry. Best-effort — never throws.
+ */
+async function recordTimeline(
+  agentName: string,
+  prompt: string,
+  runId: string,
+  t0: string,
+  result: SDKResultMessage,
+  cwd: string,
+  timelineConfig: TimelineConfig,
+): Promise<void> {
+  const sdkResult = result as SDKResultMessage & {
+    total_cost_usd: number;
+    num_turns: number;
+    is_error: boolean;
+    subtype: string;
+  };
+  const entry: TimelineEntry = {
+    run_id: runId,
+    agent: agentName,
+    session_id: result.session_id,
+    t0,
+    t1: new Date().toISOString(),
+    cost_usd: sdkResult.total_cost_usd,
+    turns: sdkResult.num_turns,
+    is_error: sdkResult.is_error,
+    subtype: sdkResult.subtype,
+    prompt_excerpt: prompt.slice(0, 200),
+    cwd,
+  };
+  await appendTimeline(entry, timelineConfig.dir);
+}
+
 export function registerQueryTools(
   server: McpServer,
   baseOptions: Options,
   toolName: string,
-  toolDescription: string
+  toolDescription: string,
+  agentName: string,
+  timelineConfig: TimelineConfig,
 ) {
   const replyToolName = `${toolName}_reply`;
 
@@ -161,6 +200,7 @@ export function registerQueryTools(
     description: toolDescription,
     inputSchema: z.object({
       prompt: z.string().describe("Task or question for Claude Code"),
+      run_id: z.string().optional().describe("Workflow run ID — groups related agent calls into one timeline. Auto-generated if omitted; returned in every response for propagation."),
       cwd: z.string().optional().describe("Working directory (overrides CLAUDE_CWD)"),
       model: z.string().optional().describe('Model override (e.g. "sonnet", "opus", "haiku")'),
       tools: z.array(z.string()).optional().describe("Restrict available tools to this list (intersects with server-level restriction)"),
@@ -173,12 +213,15 @@ export function registerQueryTools(
       maxBudgetUsd: z.number().positive().optional().describe("Max spend in USD"),
       systemPrompt: z.string().optional().describe("Additional system prompt (appended to server default)"),
     }),
-  }, async ({ prompt, cwd, model, tools, disallowedTools, additionalDirs, plugins, effort, permissionMode, maxTurns, maxBudgetUsd, systemPrompt }) => {
+  }, async ({ prompt, run_id, cwd, model, tools, disallowedTools, additionalDirs, plugins, effort, permissionMode, maxTurns, maxBudgetUsd, systemPrompt }) => {
+    const runId = run_id || randomUUID();
+    const t0 = new Date().toISOString();
     try {
       const result = await runQuery(prompt, {
         cwd, model, tools, disallowedTools, additionalDirs, plugins, effort, permissionMode, maxTurns, maxBudgetUsd, systemPrompt,
       }, baseOptions);
-      return formatResult(result);
+      await recordTimeline(agentName, prompt, runId, t0, result, baseOptions.cwd || process.cwd(), timelineConfig);
+      return formatResult(result, runId);
     } catch (error) {
       return formatError(error);
     }
@@ -194,17 +237,21 @@ export function registerQueryTools(
       inputSchema: z.object({
         session_id: z.string().describe(`Session ID from a prior ${toolName} response`),
         prompt: z.string().describe("Follow-up instruction or question"),
+        run_id: z.string().optional().describe("Workflow run ID — pass the same run_id from the original call to keep entries grouped."),
         cwd: z.string().optional().describe("Working directory override"),
         model: z.string().optional().describe("Model override"),
         maxTurns: z.number().int().positive().optional().describe("Max conversation turns"),
         maxBudgetUsd: z.number().positive().optional().describe("Max spend in USD"),
       }),
-    }, async ({ session_id, prompt, cwd, model, maxTurns, maxBudgetUsd }) => {
+    }, async ({ session_id, prompt, run_id, cwd, model, maxTurns, maxBudgetUsd }) => {
+      const runId = run_id || randomUUID();
+      const t0 = new Date().toISOString();
       try {
         const result = await runQuery(prompt, {
           cwd, model, maxTurns, maxBudgetUsd, resumeSessionId: session_id,
         }, baseOptions);
-        return formatResult(result);
+        await recordTimeline(agentName, prompt, runId, t0, result, baseOptions.cwd || process.cwd(), timelineConfig);
+        return formatResult(result, runId);
       } catch (error) {
         return formatError(error);
       }

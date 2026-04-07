@@ -159,9 +159,11 @@ describe("sanitizeToolName", () => {
     expect(sanitizeToolName("")).toBe("claude_code");
   });
 
-  it("reserves space for _reply suffix", () => {
-    expect(MAX_TOOL_NAME_LEN).toBe(58);
-    const name = sanitizeToolName("a".repeat(58));
+  it("reserves space for _transcript suffix (longest)", () => {
+    expect(MAX_TOOL_NAME_LEN).toBe(53);
+    const name = sanitizeToolName("a".repeat(53));
+    expect(`${name}_transcript`.length).toBeLessThanOrEqual(64);
+    expect(`${name}_timeline`.length).toBeLessThanOrEqual(64);
     expect(`${name}_reply`.length).toBeLessThanOrEqual(64);
   });
 });
@@ -370,7 +372,7 @@ describe("serializeArrayEnv", () => {
 // ── buildResultPayload ─────────────────────────────────────────────
 
 describe("buildResultPayload", () => {
-  it("builds success payload", () => {
+  it("builds success payload with run_id", () => {
     const payload = buildResultPayload({
       session_id: "abc-123",
       total_cost_usd: 0.05,
@@ -379,8 +381,9 @@ describe("buildResultPayload", () => {
       is_error: false,
       subtype: "success",
       result: "Hello world",
-    });
+    }, "run-001");
     expect(payload).toEqual({
+      run_id: "run-001",
       session_id: "abc-123",
       cost_usd: 0.05,
       duration_ms: 1234,
@@ -390,7 +393,7 @@ describe("buildResultPayload", () => {
     });
   });
 
-  it("builds error payload", () => {
+  it("builds error payload with run_id", () => {
     const payload = buildResultPayload({
       session_id: "abc-123",
       total_cost_usd: 0,
@@ -399,7 +402,8 @@ describe("buildResultPayload", () => {
       is_error: true,
       subtype: "error_during_execution",
       errors: ["Something went wrong"],
-    });
+    }, "run-002");
+    expect(payload.run_id).toBe("run-002");
     expect(payload.is_error).toBe(true);
     expect(payload.errors).toEqual(["Something went wrong"]);
     expect(payload.result).toBeUndefined();
