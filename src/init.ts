@@ -78,11 +78,17 @@ async function detectMcpClients(): Promise<McpClient[]> {
 // ── Config I/O ───────────────────────────────────────────────────
 
 async function readMcpConfig(path: string): Promise<McpConfig> {
+  let raw: string;
   try {
-    const raw = await readFile(path, "utf-8");
+    raw = await readFile(path, "utf-8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return {};
+    throw new Error(`Cannot read ${path}: ${(err as Error).message}`);
+  }
+  try {
     return JSON.parse(raw) as McpConfig;
   } catch {
-    return {};
+    throw new Error(`${path} contains invalid JSON — fix it manually before running init`);
   }
 }
 
@@ -127,7 +133,15 @@ async function buildCustomAgent(
   console.log("\nDescribe your custom agent:\n");
 
   const description = await rl.question("  Description (what should it do?): ");
-  const name = await rl.question("  Name (kebab-case, e.g. my-agent): ");
+  let name: string;
+  while (true) {
+    const raw = (await rl.question("  Name (kebab-case, e.g. my-agent): ")).trim();
+    if (/^[a-z0-9][a-z0-9-]*$/.test(raw) && raw.length <= 30) {
+      name = raw;
+      break;
+    }
+    console.log("    Name must be lowercase alphanumeric with hyphens, 1-30 chars.");
+  }
 
   const toolName = name
     .replace(/[^a-zA-Z0-9]+/g, "_")
@@ -182,7 +196,7 @@ Options:
   const rl = createInterface({ input: stdin, output: stdout });
 
   try {
-    console.log("\n  Claude Octopus — init wizard\n");
+    console.log("\n  Claude Octopus \u2014 init wizard\n");
     console.log("  One brain, many arms. Let's set up your agents.\n");
 
     // ── Step 1: Choose template ────────────────────────────────
@@ -308,6 +322,9 @@ Options:
     2. The new tools will appear in your AI assistant
     3. Run \`npx claude-octopus dashboard\` to monitor agent activity
 `);
+  } catch (err) {
+    console.error(`\n  Error: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exitCode = 1;
   } finally {
     rl.close();
   }

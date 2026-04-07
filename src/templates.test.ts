@@ -119,7 +119,7 @@ describe("agentToMcpEntry", () => {
     });
     expect(entry).toEqual({
       command: "npx",
-      args: ["claude-octopus@latest"],
+      args: ["-y", "claude-octopus@latest"],
       env: expect.objectContaining({
         CLAUDE_TOOL_NAME: "test_tool",
       }),

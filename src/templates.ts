@@ -52,7 +52,7 @@ export function agentToEnv(agent: AgentConfig): Record<string, string> {
 export function agentToMcpEntry(agent: AgentConfig): Record<string, unknown> {
   return {
     command: "npx",
-    args: ["claude-octopus@latest"],
+    args: ["-y", "claude-octopus@latest"],
     env: agentToEnv(agent),
   };
 }

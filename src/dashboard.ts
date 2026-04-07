@@ -10,7 +10,7 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { watch, type FSWatcher } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { buildTimelineConfig } from "./config.js";
 import { listRuns, readTimeline, type TimelineEntry, type RunSummary } from "./timeline.js";
@@ -40,38 +40,57 @@ function broadcastSSE(data: unknown): void {
 // ── File Watcher ──────────────────────────────────────────────────
 
 function watchTimeline(dir: string): FSWatcher | null {
-  const path = join(dir, "timeline.jsonl");
+  const filePath = join(dir, "timeline.jsonl");
   let lastSize = 0;
+  let processing = false;
 
   // Initialize size
-  stat(path).then((s) => { lastSize = s.size; }).catch(() => {});
+  stat(filePath).then((s) => { lastSize = s.size; }).catch(() => {});
 
-  try {
-    const watcher = watch(path, { persistent: false }, async () => {
-      try {
-        const s = await stat(path);
-        if (s.size <= lastSize) return; // No new data
-        lastSize = s.size;
+  async function onchange(filename: string | null): Promise<void> {
+    if (filename && filename !== "timeline.jsonl") return;
+    if (processing) return;
+    processing = true;
+    try {
+      const s = await stat(filePath);
+      if (s.size <= lastSize) return;
 
-        // Read last entry (tail of file)
-        const raw = await readFile(path, "utf-8");
-        const lines = raw.trim().split("\n");
-        const lastLine = lines[lines.length - 1];
-        if (lastLine) {
-          try {
-            const entry = JSON.parse(lastLine);
-            broadcastSSE({ type: "new_entry", entry });
-          } catch {
-            // Skip malformed
-          }
+      // Read only the new bytes appended since last check
+      const { createReadStream } = await import("node:fs");
+      const newData = await new Promise<string>((resolve, reject) => {
+        let buf = "";
+        const stream = createReadStream(filePath, { start: lastSize, encoding: "utf-8" });
+        stream.on("data", (chunk) => { buf += String(chunk); });
+        stream.on("end", () => resolve(buf));
+        stream.on("error", reject);
+      });
+      lastSize = s.size;
+
+      // Parse new entries
+      for (const line of newData.split("\n")) {
+        if (!line.trim()) continue;
+        try {
+          const entry = JSON.parse(line);
+          broadcastSSE({ type: "new_entry", entry });
+        } catch {
+          // Skip malformed
         }
-
-        // Also send updated run summaries
-        const runs = await listRuns(dir);
-        broadcastSSE({ type: "runs_update", runs });
-      } catch {
-        // File may not exist yet — that's fine
       }
+
+      // Send updated run summaries
+      const runs = await listRuns(dir);
+      broadcastSSE({ type: "runs_update", runs });
+    } catch {
+      // File may not exist yet — that's fine
+    } finally {
+      processing = false;
+    }
+  }
+
+  // Watch the directory so we detect file creation too
+  try {
+    const watcher = watch(dir, { persistent: false }, (_event, filename) => {
+      onchange(filename);
     });
     return watcher;
   } catch {
@@ -82,10 +101,7 @@ function watchTimeline(dir: string): FSWatcher | null {
 // ── API Handlers ──────────────────────────────────────────────────
 
 function json(res: ServerResponse, data: unknown, status = 200): void {
-  res.writeHead(status, {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-  });
+  res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(data));
 }
 
@@ -116,7 +132,6 @@ async function handleApi(
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       "Connection": "keep-alive",
-      "Access-Control-Allow-Origin": "*",
     });
     res.write(": connected\n\n");
     sseClients.add(res);
@@ -391,6 +406,15 @@ export function runDashboardCli(args: string[]): void {
   });
 
   const watcher = watchTimeline(opts.timelineDir);
+
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(`Port ${opts.port} is already in use. Try --port <n>.`);
+    } else {
+      console.error(`Server error: ${err.message}`);
+    }
+    process.exit(1);
+  });
 
   server.listen(opts.port, "127.0.0.1", () => {
     console.log(`

@@ -94,7 +94,7 @@ describe("template configs are valid", () => {
       for (const [name, entry] of Object.entries(servers)) {
         const e = entry as Record<string, unknown>;
         expect(e.command).toBe("npx");
-        expect(e.args).toEqual(["claude-octopus@latest"]);
+        expect(e.args).toEqual(["-y", "claude-octopus@latest"]);
         expect(typeof e.env).toBe("object");
         const env = e.env as Record<string, string>;
         expect(env.CLAUDE_TOOL_NAME).toBeTruthy();
