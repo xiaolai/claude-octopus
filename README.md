@@ -30,7 +30,15 @@ Or skip the install entirely — use `npx` directly in your `.mcp.json` (see Qui
 
 ## Quick Start
 
-Add to your `.mcp.json`:
+The fastest way to get started:
+
+```bash
+npx claude-octopus init
+```
+
+This interactive wizard lets you pick a template, detects your MCP client, and writes the config for you.
+
+Or add to your `.mcp.json` manually:
 
 ```json
 {
@@ -154,6 +162,77 @@ Don't want to write configs by hand? Add a factory instance:
 This exposes a single `create_claude_code_mcp` tool — an interactive wizard. Tell it what you want ("a strict code reviewer that only reads files") and it generates the `.mcp.json` entry for you, listing all available options you can customize.
 
 In factory-only mode, no query tools are registered — just the wizard. This keeps routing clean: the factory creates agents, the agents do work.
+
+## Init Wizard
+
+Don't want to edit JSON by hand? The init wizard gets you from zero to working in 30 seconds:
+
+```bash
+npx claude-octopus init
+```
+
+```
+  Claude Octopus — init wizard
+
+  One brain, many arms. Let's set up your agents.
+
+Pick a template (or build your own):
+
+  1. Code Review Team — Reviewer + test writer + security auditor
+  2. Publishing House — Researcher + architect + editor + proofreader
+  3. Tiered Models — Haiku for quick Q&A, Sonnet for coding, Opus for hard problems
+  4. Solo Agent — Single Claude Code agent with sensible defaults
+  5. Agent Factory — Interactive wizard that generates agent configs on demand
+  6. Custom — describe your own agent(s)
+
+Choice [1-6]:
+```
+
+It auto-detects installed MCP clients (Claude Desktop, Claude Code, Cursor, Windsurf), merges with existing config, and warns before overwriting.
+
+### Skip the menu
+
+```bash
+npx claude-octopus init --template code-review-team
+npx claude-octopus init --template tiered-models
+npx claude-octopus init --template publishing-house
+```
+
+## Templates
+
+Five built-in templates, battle-tested and ready to use:
+
+| Template | Agents | Purpose |
+|----------|--------|---------|
+| `code-review-team` | code-reviewer (opus), test-writer (sonnet), security-auditor (opus) | Thorough code review pipeline |
+| `publishing-house` | researcher (sonnet), architect (opus), editor (sonnet), proofreader (haiku) | Multi-stage content/code pipeline |
+| `tiered-models` | quick-qa (haiku), coder (sonnet), deep-thinker (opus) | Right model for the job |
+| `solo-agent` | claude (default) | Single agent, quick setup |
+| `factory` | agent-factory | Generates configs on demand |
+
+Each agent comes pre-tuned with appropriate model, tools, effort level, and system prompt.
+
+## Dashboard
+
+Monitor your agents in real time:
+
+```bash
+npx claude-octopus dashboard
+```
+
+Opens a local web dashboard at `http://localhost:3456` with:
+
+- **Live stats** — total runs, invocations, cost, turns, errors
+- **Recent activity** — agent cards for the latest run
+- **Run table** — all runs with cost, duration, and status
+- **Auto-refresh** — SSE connection pushes updates as agents run
+
+```bash
+# Custom port
+npx claude-octopus dashboard --port 8080
+```
+
+The dashboard reads the same timeline index used by the `_timeline` and `_report` tools. No additional configuration needed.
 
 ## Tools
 
@@ -396,9 +475,11 @@ graph TB
 | Tools per instance | 16 raw tools | 1 prompt tool | 5 (prompt, reply, timeline, transcript, report) |
 | Multi-instance | No | No | Yes |
 | Per-instance config | No | No | Yes (20 env vars) |
+| Init wizard | No | No | Yes (`init` + 5 templates) |
 | Factory wizard | No | No | Yes |
 | Session continuity | No | No | Yes |
 | Cross-agent timeline | No | No | Yes |
+| Web dashboard | No | No | Yes (live, SSE) |
 | HTML reports | No | No | Yes |
 
 ## Development
