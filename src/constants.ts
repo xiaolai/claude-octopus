@@ -127,4 +127,11 @@ export const OPTION_CATALOG: OptionCatalogEntry[] = [
     hint: "Claude Code OAuth token for this agent (overrides inherited auth)",
     example: '"sk-ant-oat01-..." — leave unset to inherit from parent',
   },
+  {
+    key: "timelineDir",
+    envVar: "CLAUDE_TIMELINE_DIR",
+    label: "Timeline directory",
+    hint: "Where to store the cross-agent timeline index (shared by all agents in a workflow)",
+    example: '"~/.claude-octopus/timelines" (default)',
+  },
 ];

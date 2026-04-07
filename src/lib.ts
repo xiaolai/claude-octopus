@@ -68,7 +68,7 @@ export function envJson<T>(
 
 // ── Tool name sanitization ─────────────────────────────────────────
 
-export const MAX_TOOL_NAME_LEN = 64 - "_reply".length;
+export const MAX_TOOL_NAME_LEN = 64 - "_transcript".length;
 
 export function sanitizeToolName(raw: string): string {
   const sanitized = raw
@@ -177,6 +177,7 @@ export function serializeArrayEnv(val: unknown[]): string {
 // ── Formatters ─────────────────────────────────────────────────────
 
 export interface ResultPayload {
+  run_id: string;
   session_id: string;
   cost_usd: number;
   duration_ms: number;
@@ -186,17 +187,21 @@ export interface ResultPayload {
   errors?: string[];
 }
 
-export function buildResultPayload(result: {
-  session_id: string;
-  total_cost_usd: number;
-  duration_ms: number;
-  num_turns: number;
-  is_error: boolean;
-  subtype: string;
-  result?: string;
-  errors?: string[];
-}): ResultPayload {
+export function buildResultPayload(
+  result: {
+    session_id: string;
+    total_cost_usd: number;
+    duration_ms: number;
+    num_turns: number;
+    is_error: boolean;
+    subtype: string;
+    result?: string;
+    errors?: string[];
+  },
+  runId: string,
+): ResultPayload {
   const payload: ResultPayload = {
+    run_id: runId,
     session_id: result.session_id,
     cost_usd: result.total_cost_usd,
     duration_ms: result.duration_ms,

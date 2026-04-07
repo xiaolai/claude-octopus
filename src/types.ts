@@ -13,6 +13,16 @@ export interface InvocationOverrides {
   maxBudgetUsd?: number;
   systemPrompt?: string;
   resumeSessionId?: string;
+  runId?: string;
+}
+
+export interface TimelineConfig {
+  dir: string;
+}
+
+export interface OctopusConfig {
+  sdkOptions: Options;
+  timeline: TimelineConfig;
 }
 
 export interface OptionCatalogEntry {
