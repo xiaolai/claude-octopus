@@ -25,8 +25,7 @@ export function registerTimelineTool(
     ].join(" "),
     inputSchema: z.object({
       run_id: z.string().optional().describe("Show all entries for this workflow run, ordered by time"),
-      session_id: z.string().optional().describe("Retrieve data for a specific session"),
-      info_only: z.boolean().optional().describe("When used with session_id: return metadata only, not full transcript"),
+      session_id: z.string().optional().describe("Retrieve timeline entry and session metadata for a specific session"),
     }),
   }, async ({ run_id, session_id }) => {
     try {
