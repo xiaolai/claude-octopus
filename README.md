@@ -130,6 +130,7 @@ Each non-factory instance exposes:
 | `<name>_reply`      | Continue a previous conversation by `session_id`                 |
 | `<name>_timeline`   | Query the cross-agent workflow timeline                          |
 | `<name>_transcript` | Retrieve full session transcript from Claude Code's storage      |
+| `<name>_report`     | Generate a self-contained HTML report for a run or all runs      |
 
 Per-invocation parameters (override server defaults):
 
@@ -260,6 +261,29 @@ Later: researcher_timeline({ run_id: "pub-001" })
 
 Later: researcher_transcript({ session_id: "ses-aaa" })
        → full conversation transcript from Claude Code's storage
+```
+
+### HTML reports
+
+Generate a self-contained HTML report with agent sequence, cost breakdown, and collapsible transcripts.
+
+**Via MCP tool:**
+```
+<name>_report({})                        # list all runs
+<name>_report({ run_id: "pub-001" })     # detailed report for one run
+```
+
+**Via CLI:**
+```bash
+# List all runs
+npx claude-octopus-report report --list --out index.html
+
+# Detailed report for one run
+npx claude-octopus-report report pub-001 --out report.html
+open report.html
+
+# Without transcripts (faster, smaller file)
+npx claude-octopus-report report pub-001 --no-transcripts --out report.html
 ```
 
 ## Security

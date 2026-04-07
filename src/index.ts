@@ -17,6 +17,7 @@ import { envStr, envBool, sanitizeToolName } from "./lib.js";
 import { buildOctopusConfig } from "./config.js";
 import { registerQueryTools } from "./tools/query.js";
 import { registerTimelineTool } from "./tools/timeline.js";
+import { registerReportTool } from "./tools/report.js";
 import { registerFactoryTool } from "./tools/factory.js";
 
 const require = createRequire(import.meta.url);
@@ -60,6 +61,12 @@ if (!FACTORY_ONLY) {
     CONFIG.timeline,
     CONFIG.sdkOptions.persistSession !== false,
   );
+  registerReportTool(
+    server,
+    TOOL_NAME,
+    CONFIG.timeline,
+    CONFIG.sdkOptions.persistSession !== false,
+  );
 }
 
 if (FACTORY_ONLY) {
@@ -78,6 +85,7 @@ async function main() {
         ...(CONFIG.sdkOptions.persistSession !== false ? [REPLY_TOOL_NAME] : []),
         TIMELINE_TOOL_NAME,
         ...(CONFIG.sdkOptions.persistSession !== false ? [`${TOOL_NAME}_transcript`] : []),
+        `${TOOL_NAME}_report`,
       ];
   console.error(`${SERVER_NAME}: running on stdio (tools: ${toolList.join(", ")})`);
 }
