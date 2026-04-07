@@ -16,9 +16,9 @@ import {
   deriveServerName,
   deriveToolName,
   serializeArrayEnv,
-  buildResultPayload,
   formatErrorMessage,
 } from "./lib.js";
+import { buildResultPayload } from "./query-helpers.js";
 
 // ── envStr ─────────────────────────────────────────────────────────
 

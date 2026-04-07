@@ -174,46 +174,37 @@ export function serializeArrayEnv(val: unknown[]): string {
   return hasComma ? JSON.stringify(val) : val.join(",");
 }
 
-// ── Formatters ─────────────────────────────────────────────────────
+// ── Shared formatters ─────────────────────────────────────────────
 
-export interface ResultPayload {
-  run_id: string;
-  session_id: string;
-  cost_usd: number;
-  duration_ms: number;
-  num_turns: number;
-  is_error: boolean;
-  result?: string;
-  errors?: string[];
+export function esc(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
-export function buildResultPayload(
-  result: {
-    session_id: string;
-    total_cost_usd: number;
-    duration_ms: number;
-    num_turns: number;
-    is_error: boolean;
-    subtype: string;
-    result?: string;
-    errors?: string[];
-  },
-  runId: string,
-): ResultPayload {
-  const payload: ResultPayload = {
-    run_id: runId,
-    session_id: result.session_id,
-    cost_usd: result.total_cost_usd,
-    duration_ms: result.duration_ms,
-    num_turns: result.num_turns,
-    is_error: result.is_error,
-  };
-  if (result.subtype === "success") {
-    payload.result = result.result;
-  } else {
-    payload.errors = result.errors;
-  }
-  return payload;
+export function formatCost(usd: number): string {
+  return `$${usd.toFixed(4)}`;
+}
+
+export function formatDuration(t0: string, t1: string): string {
+  const ms = new Date(t1).getTime() - new Date(t0).getTime();
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${(ms / 60000).toFixed(1)}m`;
+}
+
+export function formatTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
 }
 
 export function formatErrorMessage(error: unknown): string {
