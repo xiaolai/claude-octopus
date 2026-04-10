@@ -78,4 +78,32 @@ a { color: var(--accent); text-decoration: none; }
 .tool-result pre { color: var(--text-dim); font-size: 0.75rem; max-height: 200px; overflow-y: auto; }
 .no-transcript { font-size: 0.8rem; color: var(--text-dim); font-style: italic; }
 .empty { color: var(--text-dim); font-style: italic; }
+
+code { overflow-wrap: break-word; word-break: break-all; }
+.agent-prompt { overflow-wrap: break-word; word-break: break-word; }
+.run-header { flex-wrap: wrap; }
+.run-header h2 { word-break: break-all; }
+.run-table tbody tr:active { background: var(--surface); }
+
+@media (max-width: 600px) {
+  body { padding: 1rem 0.75rem; }
+  .run-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .run { padding: 0.75rem; }
+  .run-stats { gap: 1rem; }
+  .stat { flex: 1 1 calc(50% - 1rem); min-width: 0; }
+  .timeline-bar { flex-wrap: wrap; gap: 4px; }
+  .timeline-dot + .timeline-dot { margin-left: 0; }
+  .timeline-dot { width: 36px; height: 36px; font-size: 0.8rem; }
+  .agent-card { padding: 0.75rem; }
+  .agent-meta { gap: 0.5rem; }
+  .agent-seq { width: 32px; height: 32px; font-size: 0.75rem; }
+  .agent-badge, .msg-role { font-size: 0.75rem; }
+  .transcript > summary { padding: 0.75rem 0; min-height: 44px; display: flex; align-items: center; }
+  .transcript-body { max-height: 50vh; }
+  .tool-input { max-height: none; overflow-y: visible; }
+  .tool-result pre { max-height: none; overflow-y: visible; }
+}
+@media (max-width: 360px) {
+  .stat { flex: 1 1 100%; }
+}
 `;

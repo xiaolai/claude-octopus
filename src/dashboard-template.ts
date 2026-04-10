@@ -56,6 +56,24 @@ code { font-family: var(--mono); background: var(--surface); padding: 0.15em 0.4
 
 .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--surface); border: 1px solid var(--accent); border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--accent); opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100; }
 .toast.show { opacity: 1; }
+
+code { overflow-wrap: break-word; word-break: break-all; }
+.entry-meta { flex-wrap: wrap; }
+.entry-prompt { overflow-wrap: break-word; word-break: break-word; }
+.run-table tbody tr:active { background: var(--surface); }
+
+@media (max-width: 600px) {
+  body { padding: 1rem 0.75rem; }
+  .connection { float: none; display: flex; margin-top: 0.5rem; }
+  .stats { gap: 0.75rem; }
+  .stat-card { min-width: 0; flex: 1 1 calc(50% - 0.75rem); padding: 0.75rem; }
+  .run-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .entry-badge, .entry-seq { font-size: 0.75rem; }
+  .toast { left: 0.75rem; right: 0.75rem; bottom: 0.75rem; text-align: center; }
+}
+@media (max-width: 360px) {
+  .stat-card { flex: 1 1 100%; }
+}
 `;
 
 // ── Client-side JS ───────────────────────────────────────────────
