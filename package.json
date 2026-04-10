@@ -26,6 +26,13 @@
     "typescript": "^5.8.0",
     "vitest": "^4.1.2"
   },
+  "files": [
+    "dist/",
+    "assets/",
+    "server.json",
+    "README.md",
+    "LICENSE"
+  ],
   "license": "ISC",
   "engines": {
     "node": ">=18.0.0"

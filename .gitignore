@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+.playwright-mcp/
 
 # Claude Code artifacts
 .claude/
