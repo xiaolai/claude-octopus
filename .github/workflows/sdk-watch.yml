@@ -1,0 +1,86 @@
+name: SDK watch — auto-bump Agent SDK
+
+on:
+  schedule:
+    # Every 6 hours
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # ── Detect new SDK version ─────────────────────────────────
+      - name: Check for SDK update
+        id: check
+        run: |
+          CURRENT=$(node -e "console.log(require('./node_modules/@anthropic-ai/claude-agent-sdk/package.json').version)")
+          LATEST=$(npm view @anthropic-ai/claude-agent-sdk version)
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST"   >> "$GITHUB_OUTPUT"
+          if [ "$CURRENT" = "$LATEST" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── Bump SDK ───────────────────────────────────────────────
+      - name: Update SDK dependency
+        if: steps.check.outputs.skip == 'false'
+        run: pnpm add @anthropic-ai/claude-agent-sdk@latest
+
+      # ── Build + test ───────────────────────────────────────────
+      - name: Build
+        if: steps.check.outputs.skip == 'false'
+        run: pnpm build
+
+      - name: Test
+        if: steps.check.outputs.skip == 'false'
+        run: pnpm test
+
+      # ── Bump octopus patch version ─────────────────────────────
+      - name: Bump patch version
+        if: steps.check.outputs.skip == 'false'
+        id: version
+        run: |
+          NEW_VERSION=$(node -e "
+            const pkg = require('./package.json');
+            const [maj, min, pat] = pkg.version.split('.').map(Number);
+            console.log(maj + '.' + min + '.' + (pat + 1));
+          ")
+          pnpm pkg set version="$NEW_VERSION"
+          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+      # ── Commit + push ──────────────────────────────────────────
+      - name: Commit and push
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json pnpm-lock.yaml
+          git commit -m "chore: bump agent-sdk ${{ steps.check.outputs.current }} -> ${{ steps.check.outputs.latest }}, release v${{ steps.version.outputs.version }}"
+          git push
+
+      # ── Publish to npm ─────────────────────────────────────────
+      - name: Publish
+        if: steps.check.outputs.skip == 'false'
+        run: pnpm publish --no-git-checks --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
