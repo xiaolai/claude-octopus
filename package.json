@@ -1,6 +1,6 @@
 {
   "name": "claude-octopus",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "One brain, many arms — spawn multiple specialized Claude Code agents as MCP servers",
   "mcpName": "io.github.xiaolai/claude-octopus",
   "type": "module",
@@ -16,7 +16,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.89",
+    "@anthropic-ai/claude-agent-sdk": "^0.2.98",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^4.3.6"
   },
