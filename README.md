@@ -22,11 +22,21 @@ Claude Octopus lets you spin up as many of these as you need. Same binary, diffe
 
 ## Install
 
+Three paths, pick whichever matches your MCP client.
+
+### npm (most direct)
+
 ```bash
 npm install claude-octopus
 ```
 
-Or skip the install entirely — use `npx` directly in your `.mcp.json` (see Quick Start below).
+### npx (no install needed)
+
+Skip the install entirely — reference `claude-octopus@latest` in your `.mcp.json` and the client will fetch on demand (see Quick Start below).
+
+### MCP Registry
+
+The server is published to the [MCP Registry](https://registry.modelcontextprotocol.io) under the name **`io.github.xiaolai/claude-octopus`**. Registry-aware MCP clients can resolve and install it by that name without touching npm directly.
 
 ## Quick Start
 
