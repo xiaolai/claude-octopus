@@ -15,6 +15,7 @@ import { envStr, envBool, sanitizeToolName } from "./lib.js";
 import { buildOctopusConfig } from "./config.js";
 import { registerQueryTools } from "./tools/query.js";
 import { registerTimelineTool } from "./tools/timeline.js";
+import { registerSessionsTool } from "./tools/sessions.js";
 import { registerReportTool } from "./tools/report.js";
 import { registerFactoryTool } from "./tools/factory.js";
 import { runReportCli } from "./cli.js";
@@ -74,6 +75,11 @@ function startMcpServer() {
       CONFIG.timeline,
       CONFIG.sdkOptions.persistSession !== false,
     );
+    registerSessionsTool(
+      server,
+      TOOL_NAME,
+      CONFIG.sdkOptions.cwd || process.cwd(),
+    );
     registerReportTool(
       server,
       TOOL_NAME,
@@ -96,6 +102,7 @@ function startMcpServer() {
           ...(CONFIG.sdkOptions.persistSession !== false ? [REPLY_TOOL_NAME] : []),
           TIMELINE_TOOL_NAME,
           ...(CONFIG.sdkOptions.persistSession !== false ? [`${TOOL_NAME}_transcript`] : []),
+          `${TOOL_NAME}_sessions`,
           `${TOOL_NAME}_report`,
         ];
     console.error(`${SERVER_NAME}: running on stdio (tools: ${toolList.join(", ")})`);

@@ -64,7 +64,7 @@ Or add to your `.mcp.json` manually:
 }
 ```
 
-This gives you five tools:
+This gives you six tools:
 
 | Tool | Purpose |
 |------|---------|
@@ -72,6 +72,7 @@ This gives you five tools:
 | `claude_code_reply` | Continue a conversation |
 | `claude_code_timeline` | Query the workflow timeline |
 | `claude_code_transcript` | Read full session transcripts |
+| `claude_code_sessions` | List Claude Code session history (this project, or all) |
 | `claude_code_report` | Generate HTML reports |
 
 That's it — you have Claude Code as a tool, with full workflow observability built in.
@@ -254,6 +255,7 @@ Each non-factory instance exposes:
 | `<name>_reply` | Continue a previous conversation by `session_id` |
 | `<name>_timeline` | Query the cross-agent workflow timeline |
 | `<name>_transcript` | Retrieve full session transcript from Claude Code's storage |
+| `<name>_sessions` | List Claude Code session history — this project by default, or all projects with `all_projects: true` |
 | `<name>_report` | Generate a self-contained HTML report for a run or all runs |
 
 ### Query and reply parameters
