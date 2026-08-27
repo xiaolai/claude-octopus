@@ -95,6 +95,46 @@ export function buildResultPayload(
   return payload;
 }
 
+// ── System prompt merging ────────────────────────────────────────
+
+export interface SystemPromptMerge {
+  /** Replacement value, when the base can be rewritten safely. */
+  systemPrompt?: Options["systemPrompt"];
+  /** Text for `--append-system-prompt`, when the base must stay intact. */
+  appendFlag?: string;
+}
+
+/**
+ * Fold an invocation's extra system prompt into the server-level one.
+ *
+ * The SDK types `systemPrompt` as `string | string[] | { type: 'preset' }`,
+ * and the `string[]` arm arrived mid-0.2.x. `typeof [] === "object"`, so the
+ * array has to be narrowed out before the preset check or it lands in the
+ * wrong branch — which is what broke the SDK auto-bump build.
+ */
+export function mergeSystemPrompt(
+  base: Options["systemPrompt"],
+  override: string,
+): SystemPromptMerge {
+  if (!Array.isArray(base) && typeof base === "object" && base?.type === "preset") {
+    return {
+      systemPrompt: {
+        type: "preset",
+        preset: "claude_code",
+        append: [base.append || "", override].filter(Boolean).join("\n"),
+      },
+    };
+  }
+  if (base !== undefined) {
+    // A plain string or a multi-part prompt: leave the base untouched and let
+    // the CLI flag append to it, rather than guessing how to splice it.
+    return { appendFlag: override };
+  }
+  return {
+    systemPrompt: { type: "preset", preset: "claude_code", append: override },
+  };
+}
+
 // ── Query execution ──────────────────────────────────────────────
 
 /**
@@ -209,27 +249,14 @@ export async function runQuery(
   }
 
   if (overrides.systemPrompt) {
-    if (
-      typeof baseOptions.systemPrompt === "object" &&
-      baseOptions.systemPrompt?.type === "preset"
-    ) {
-      const baseAppend = baseOptions.systemPrompt.append || "";
-      options.systemPrompt = {
-        type: "preset",
-        preset: "claude_code",
-        append: [baseAppend, overrides.systemPrompt].filter(Boolean).join("\n"),
-      };
-    } else if (typeof baseOptions.systemPrompt === "string") {
-      options.systemPrompt = baseOptions.systemPrompt;
+    const merged = mergeSystemPrompt(baseOptions.systemPrompt, overrides.systemPrompt);
+    if (merged.systemPrompt !== undefined) {
+      options.systemPrompt = merged.systemPrompt;
+    }
+    if (merged.appendFlag !== undefined) {
       options.extraArgs = {
         ...options.extraArgs,
-        "append-system-prompt": overrides.systemPrompt,
-      };
-    } else {
-      options.systemPrompt = {
-        type: "preset",
-        preset: "claude_code",
-        append: overrides.systemPrompt,
+        "append-system-prompt": merged.appendFlag,
       };
     }
   }

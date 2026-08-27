@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
-import { consumeQuery, buildResultPayload } from "./query-helpers.js";
+import type { Options } from "./types.js";
+import {
+  consumeQuery,
+  buildResultPayload,
+  mergeSystemPrompt,
+} from "./query-helpers.js";
 
 // ── Stream fixtures ───────────────────────────────────────────────
 
@@ -169,5 +174,61 @@ describe("buildResultPayload metrics", () => {
 
     expect(payload).not.toHaveProperty("tool_calls");
     expect(payload).not.toHaveProperty("response_groups");
+  });
+});
+
+// ── mergeSystemPrompt ─────────────────────────────────────────────
+
+describe("mergeSystemPrompt", () => {
+  it("appends to an existing preset", () => {
+    const merged = mergeSystemPrompt(
+      { type: "preset", preset: "claude_code", append: "Be terse." },
+      "Cite sources.",
+    );
+
+    expect(merged.systemPrompt).toEqual({
+      type: "preset",
+      preset: "claude_code",
+      append: "Be terse.\nCite sources.",
+    });
+    expect(merged.appendFlag).toBeUndefined();
+  });
+
+  it("drops the blank line when the preset has no append yet", () => {
+    const merged = mergeSystemPrompt(
+      { type: "preset", preset: "claude_code" },
+      "Cite sources.",
+    );
+
+    expect(merged.systemPrompt).toMatchObject({ append: "Cite sources." });
+  });
+
+  it("builds a preset when there is no base prompt", () => {
+    const merged = mergeSystemPrompt(undefined, "Cite sources.");
+
+    expect(merged.systemPrompt).toEqual({
+      type: "preset",
+      preset: "claude_code",
+      append: "Cite sources.",
+    });
+  });
+
+  it("leaves a string base intact and appends via the CLI flag", () => {
+    const merged = mergeSystemPrompt("You are a linter.", "Cite sources.");
+
+    expect(merged.systemPrompt).toBeUndefined();
+    expect(merged.appendFlag).toBe("Cite sources.");
+  });
+
+  it("leaves a multi-part base intact rather than treating it as a preset", () => {
+    // `typeof [] === "object"`, so without an Array.isArray guard this lands in
+    // the preset branch and stops compiling. The cast keeps the test valid on
+    // SDK lines whose Options type predates the string[] arm.
+    const base = ["part one", "part two"] as unknown as Options["systemPrompt"];
+
+    const merged = mergeSystemPrompt(base, "Cite sources.");
+
+    expect(merged.systemPrompt).toBeUndefined();
+    expect(merged.appendFlag).toBe("Cite sources.");
   });
 });
