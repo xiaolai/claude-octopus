@@ -135,3 +135,20 @@ export const OPTION_CATALOG: OptionCatalogEntry[] = [
     example: '"~/.claude-octopus/timelines" (default)',
   },
 ];
+
+// ── Metric tooltips ──────────────────────────────────────────────
+//
+// Shared by the HTML report and the live dashboard so both explain the same
+// number the same way. See src/query-helpers.ts (QueryMetrics) for why
+// `num_turns` needs the caveat.
+
+export const SDK_TURNS_HINT =
+  "Raw num_turns from the Agent SDK. It tracks tool_use blocks plus the final response, " +
+  "so parallel tool calls inflate it relative to actual API round trips.";
+
+export const RESPONSES_HINT =
+  "API round trips in the main agent loop — distinct assistant responses, " +
+  "counting one response no matter how many tools it called in parallel.";
+
+export const TOOL_CALLS_HINT =
+  "tool_use blocks issued across the main agent loop.";

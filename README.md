@@ -233,7 +233,7 @@ npx claude-octopus dashboard
 
 Opens a local web dashboard at `http://localhost:3456` with:
 
-- **Live stats** — total runs, invocations, cost, turns, errors
+- **Live stats** — total runs, invocations, cost, SDK turns, responses, errors
 - **Recent activity** — agent cards for the latest run
 - **Run table** — all runs with cost, duration, and status
 - **Auto-refresh** — SSE connection pushes updates as agents run
@@ -272,7 +272,7 @@ Each non-factory instance exposes:
 | `plugins` | Additional plugin paths to load |
 | `effort` | Thinking effort (`low`, `medium`, `high`, `max`) |
 | `permissionMode` | Permission mode (can only tighten, never loosen) |
-| `maxTurns` | Max conversation turns |
+| `maxTurns` | Max agent-loop round trips (see [effort counters](#reading-the-effort-counters)) |
 | `maxBudgetUsd` | Max spend in USD |
 | `systemPrompt` | Additional prompt (appended to server default) |
 
@@ -335,9 +335,9 @@ Host:  verifier({ prompt: "Check this plan", run_id: "pub-001" })
 
 Later: researcher_timeline({ run_id: "pub-001" })
        → [
-           { agent: "researcher", session_id: "ses-aaa", cost: 0.05, turns: 4 },
-           { agent: "architect",  session_id: "ses-bbb", cost: 0.08, turns: 6 },
-           { agent: "verifier",   session_id: "ses-ccc", cost: 0.03, turns: 3 },
+           { agent: "researcher", session_id: "ses-aaa", cost: 0.05, turns: 4, tool_calls: 3, response_groups: 2 },
+           { agent: "architect",  session_id: "ses-bbb", cost: 0.08, turns: 6, tool_calls: 5, response_groups: 3 },
+           { agent: "verifier",   session_id: "ses-ccc", cost: 0.03, turns: 3, tool_calls: 2, response_groups: 2 },
          ]
 
 Later: researcher_transcript({ session_id: "ses-aaa" })
@@ -374,10 +374,32 @@ npx claude-octopus report pub-001 > report.html
 
 ### What's in the report
 
-- **Run summary** — agent count, total cost, duration, total turns
+- **Run summary** — agent count, total cost, duration, SDK turns, responses, tool calls
 - **Timeline bar** — numbered dots for each agent (green = success, red = error)
-- **Agent cards** — timing, cost, turns, session ID, prompt excerpt
+- **Agent cards** — timing, cost, effort counters, session ID, prompt excerpt
 - **Collapsible transcripts** — full tool calls, reasoning, and results per agent
+
+### Reading the effort counters
+
+Three numbers describe how much work an invocation took. They are not
+interchangeable, and the first one is the one that surprises people:
+
+| Metric | What it counts |
+|---|---|
+| `num_turns` (shown as **SDK turns**) | Raw value from the Agent SDK. Measured against the runtime it tracks `tool_use` blocks plus the final response — **not** API round trips. |
+| `response_groups` (**responses**) | Distinct assistant responses in the main agent loop — one per API round trip, no matter how many tools that response called in parallel. |
+| `tool_calls` (**tool calls**) | `tool_use` blocks issued across the main agent loop. |
+
+When an agent calls several tools in parallel, `num_turns` climbs faster than
+the number of visible responses. A run with 3 assistant responses issuing 4
+tool calls reports `num_turns: 5`, `response_groups: 3`, `tool_calls: 4`.
+`maxTurns`, meanwhile, is enforced against round trips: that same run
+completes under `maxTurns: 3` and aborts under `maxTurns: 2`. So size
+`maxTurns` against **responses**, not against SDK turns.
+
+Both new counters cover the main agent loop only — work inside a sub-agent
+(`Task`) belongs to its own loop and is excluded. Timeline entries written by
+older versions have neither, and render as `—` rather than as a false zero.
 
 ## Configuration
 
@@ -401,7 +423,7 @@ All configuration is via environment variables in `.mcp.json`. Every env var is 
 | `CLAUDE_PERMISSION_MODE` | `default`, `acceptEdits`, `bypassPermissions`, `plan` | `default` |
 | `CLAUDE_ALLOWED_TOOLS` | Comma-separated tool restriction (available tools) | all |
 | `CLAUDE_DISALLOWED_TOOLS` | Comma-separated tool blacklist | none |
-| `CLAUDE_MAX_TURNS` | Max conversation turns | unlimited |
+| `CLAUDE_MAX_TURNS` | Max agent-loop round trips per invocation | unlimited |
 | `CLAUDE_MAX_BUDGET_USD` | Max spend per invocation | unlimited |
 | `CLAUDE_EFFORT` | `low`, `medium`, `high`, `max` | SDK default |
 

@@ -5,6 +5,11 @@
 import type { SessionMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { TimelineEntry, RunSummary } from "./timeline.js";
 import { esc, formatCost, formatDuration, formatTime } from "./lib.js";
+import {
+  SDK_TURNS_HINT,
+  RESPONSES_HINT,
+  TOOL_CALLS_HINT,
+} from "./constants.js";
 
 // ── Types (internal to rendering) ────────────────────────────────
 
@@ -105,7 +110,13 @@ export function renderAgent(agent: AgentReport, idx: number): string {
     `    <span>${formatTime(e.t0)}</span>`,
     `    <span>${duration}</span>`,
     `    <span>${formatCost(e.cost_usd)}</span>`,
-    `    <span>${e.turns} turns</span>`,
+    `    <span title="${esc(SDK_TURNS_HINT)}">${e.turns} SDK turns</span>`,
+    ...(e.response_groups !== undefined
+      ? [`    <span title="${esc(RESPONSES_HINT)}">${e.response_groups} responses</span>`]
+      : []),
+    ...(e.tool_calls !== undefined
+      ? [`    <span title="${esc(TOOL_CALLS_HINT)}">${e.tool_calls} tool calls</span>`]
+      : []),
     `    <span class="session-id" title="${esc(e.session_id)}">${esc(e.session_id.slice(0, 8))}\u2026</span>`,
     `  </div>`,
     `  <div class="agent-prompt">${esc(e.prompt_excerpt)}</div>`,
@@ -132,7 +143,13 @@ export function renderRun(run: RunReport): string {
     `  <div class="run-stats">`,
     `    <div class="stat"><div class="stat-val">${s.entry_count}</div><div class="stat-label">agents</div></div>`,
     `    <div class="stat"><div class="stat-val">${formatCost(s.total_cost_usd)}</div><div class="stat-label">total cost</div></div>`,
-    `    <div class="stat"><div class="stat-val">${s.total_turns}</div><div class="stat-label">total turns</div></div>`,
+    `    <div class="stat" title="${esc(SDK_TURNS_HINT)}"><div class="stat-val">${s.total_turns}</div><div class="stat-label">SDK turns</div></div>`,
+    ...(s.total_response_groups !== undefined
+      ? [`    <div class="stat" title="${esc(RESPONSES_HINT)}"><div class="stat-val">${s.total_response_groups}</div><div class="stat-label">responses</div></div>`]
+      : []),
+    ...(s.total_tool_calls !== undefined
+      ? [`    <div class="stat" title="${esc(TOOL_CALLS_HINT)}"><div class="stat-val">${s.total_tool_calls}</div><div class="stat-label">tool calls</div></div>`]
+      : []),
     `    <div class="stat"><div class="stat-val">${duration}</div><div class="stat-label">duration</div></div>`,
     `    <div class="stat"><div class="stat-val">${formatTime(s.t0)}</div><div class="stat-label">started</div></div>`,
     `  </div>`,
@@ -166,6 +183,8 @@ export function renderRunList(runs: RunSummary[]): string {
         `  <td>${r.entry_count}</td>`,
         `  <td>${formatCost(r.total_cost_usd)}</td>`,
         `  <td>${r.total_turns}</td>`,
+        `  <td>${r.total_response_groups ?? "—"}</td>`,
+        `  <td>${r.total_tool_calls ?? "—"}</td>`,
         `  <td>${dur}</td>`,
         `  <td class="${statusCls}">${r.has_errors ? "errors" : "ok"}</td>`,
         `  <td>${formatTime(r.t0)}</td>`,
@@ -177,7 +196,11 @@ export function renderRunList(runs: RunSummary[]): string {
   return [
     `<table class="run-table">`,
     `<thead><tr>`,
-    `  <th>Run ID</th><th>Agents</th><th>#</th><th>Cost</th><th>Turns</th><th>Duration</th><th>Status</th><th>Started</th>`,
+    `  <th>Run ID</th><th>Agents</th><th>#</th><th>Cost</th>`,
+    `  <th title="${esc(SDK_TURNS_HINT)}">SDK turns</th>`,
+    `  <th title="${esc(RESPONSES_HINT)}">Responses</th>`,
+    `  <th title="${esc(TOOL_CALLS_HINT)}">Tool calls</th>`,
+    `  <th>Duration</th><th>Status</th><th>Started</th>`,
     `</tr></thead>`,
     `<tbody>${rows}</tbody>`,
     `</table>`,

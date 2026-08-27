@@ -5,6 +5,11 @@
 
 import { type RunSummary, type TimelineEntry } from "./timeline.js";
 import { esc, formatCost, formatDuration } from "./lib.js";
+import {
+  SDK_TURNS_HINT,
+  RESPONSES_HINT,
+  TOOL_CALLS_HINT,
+} from "./constants.js";
 
 // ── CSS ──────────────────────────────────────────────────────────
 
@@ -129,6 +134,8 @@ function renderRunRow(r: RunSummary): string {
     <td>${r.entry_count}</td>
     <td>${formatCost(r.total_cost_usd)}</td>
     <td>${r.total_turns}</td>
+    <td>${r.total_response_groups ?? "\u2014"}</td>
+    <td>${r.total_tool_calls ?? "\u2014"}</td>
     <td>${dur}</td>
     <td class="${statusCls}">${r.has_errors ? "errors" : "ok"}</td>
     <td>${new Date(r.t0).toLocaleString()}</td>
@@ -148,7 +155,9 @@ function renderEntryCard(e: TimelineEntry, idx: number): string {
     <div class="entry-meta">
       <span>${dur}</span>
       <span>${formatCost(e.cost_usd)}</span>
-      <span>${e.turns} turns</span>
+      <span title="${esc(SDK_TURNS_HINT)}">${e.turns} SDK turns</span>
+      ${e.response_groups !== undefined ? `<span title="${esc(RESPONSES_HINT)}">${e.response_groups} responses</span>` : ""}
+      ${e.tool_calls !== undefined ? `<span title="${esc(TOOL_CALLS_HINT)}">${e.tool_calls} tool calls</span>` : ""}
       <span class="mono">${esc(e.session_id.slice(0, 8))}\u2026</span>
     </div>
     <div class="entry-prompt">${esc(e.prompt_excerpt)}</div>
@@ -169,6 +178,9 @@ export async function buildDashboardHtml(
   const totalCost = runs.reduce((s, r) => s + r.total_cost_usd, 0);
   const totalAgents = runs.reduce((s, r) => s + r.entry_count, 0);
   const totalTurns = runs.reduce((s, r) => s + r.total_turns, 0);
+  const totalResponses = runs.some((r) => r.total_response_groups !== undefined)
+    ? runs.reduce((s, r) => s + (r.total_response_groups ?? 0), 0)
+    : undefined;
   const errorCount = runs.filter((r) => r.has_errors).length;
 
   let recentRunHtml = "<p class='empty'>No runs yet. Start an agent to see activity here.</p>";
@@ -202,7 +214,8 @@ export async function buildDashboardHtml(
     <div class="stat-card"><div class="stat-val" id="stat-runs">${runs.length}</div><div class="stat-label">runs</div></div>
     <div class="stat-card"><div class="stat-val" id="stat-agents">${totalAgents}</div><div class="stat-label">invocations</div></div>
     <div class="stat-card"><div class="stat-val" id="stat-cost">${formatCost(totalCost)}</div><div class="stat-label">total cost</div></div>
-    <div class="stat-card"><div class="stat-val" id="stat-turns">${totalTurns}</div><div class="stat-label">total turns</div></div>
+    <div class="stat-card" title="${esc(SDK_TURNS_HINT)}"><div class="stat-val" id="stat-turns">${totalTurns}</div><div class="stat-label">SDK turns</div></div>
+    <div class="stat-card" title="${esc(RESPONSES_HINT)}"><div class="stat-val" id="stat-responses">${totalResponses ?? "\u2014"}</div><div class="stat-label">responses</div></div>
     <div class="stat-card"><div class="stat-val" id="stat-errors">${errorCount}</div><div class="stat-label">errors</div></div>
   </div>
 
@@ -212,7 +225,11 @@ export async function buildDashboardHtml(
   <h2>All Runs</h2>
   <table class="run-table">
     <thead><tr>
-      <th>Run ID</th><th>Agents</th><th>#</th><th>Cost</th><th>Turns</th><th>Duration</th><th>Status</th><th>Started</th>
+      <th>Run ID</th><th>Agents</th><th>#</th><th>Cost</th>
+      <th title="${esc(SDK_TURNS_HINT)}">SDK turns</th>
+      <th title="${esc(RESPONSES_HINT)}">Responses</th>
+      <th title="${esc(TOOL_CALLS_HINT)}">Tool calls</th>
+      <th>Duration</th><th>Status</th><th>Started</th>
     </tr></thead>
     <tbody id="run-table-body">${runTableRows}</tbody>
   </table>

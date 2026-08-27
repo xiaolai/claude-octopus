@@ -89,9 +89,52 @@ describe("generateRunReport", () => {
     expect(html).toContain("architect");
     expect(html).toContain("$0.05");
     expect(html).toContain("$0.08");
-    expect(html).toContain("4 turns");
-    expect(html).toContain("6 turns");
+    expect(html).toContain("4 SDK turns");
+    expect(html).toContain("6 SDK turns");
     expect(html).toContain("Transcript not loaded");
+  });
+
+  it("labels turns as SDK turns and explains the caveat", async () => {
+    await appendTimeline(makeEntry({ turns: 9 }), tmpDir);
+
+    const html = await generateRunReport({
+      timelineDir: tmpDir,
+      runId: "run-001",
+      includeTranscripts: false,
+    });
+
+    expect(html).toContain("9 SDK turns");
+    expect(html).not.toContain("9 turns");
+    expect(html).toContain("parallel tool calls inflate it");
+  });
+
+  it("shows response and tool-call counts when the entry has them", async () => {
+    await appendTimeline(
+      makeEntry({ turns: 6, response_groups: 3, tool_calls: 5 }),
+      tmpDir,
+    );
+
+    const html = await generateRunReport({
+      timelineDir: tmpDir,
+      runId: "run-001",
+      includeTranscripts: false,
+    });
+
+    expect(html).toContain("3 responses");
+    expect(html).toContain("5 tool calls");
+  });
+
+  it("omits the new metrics for entries recorded before they existed", async () => {
+    await appendTimeline(makeEntry({ turns: 6 }), tmpDir);
+
+    const html = await generateRunReport({
+      timelineDir: tmpDir,
+      runId: "run-001",
+      includeTranscripts: false,
+    });
+
+    expect(html).not.toContain("responses</div>");
+    expect(html).not.toContain("tool calls</div>");
   });
 
   it("shows error status for failed agents", async () => {
