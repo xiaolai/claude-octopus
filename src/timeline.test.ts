@@ -135,6 +135,32 @@ describe("listRuns", () => {
     expect(run001.has_errors).toBe(false);
   });
 
+  it("sums tool_calls and response_groups across a run", async () => {
+    await appendTimeline(makeEntry({ run_id: "run-m", tool_calls: 5, response_groups: 3 }), tmpDir);
+    await appendTimeline(makeEntry({ run_id: "run-m", tool_calls: 2, response_groups: 2 }), tmpDir);
+
+    const run = (await listRuns(tmpDir)).find((r) => r.run_id === "run-m")!;
+    expect(run.total_tool_calls).toBe(7);
+    expect(run.total_response_groups).toBe(5);
+  });
+
+  it("leaves the new totals undefined for pre-metric entries", async () => {
+    await appendTimeline(makeEntry({ run_id: "run-old" }), tmpDir);
+
+    const run = (await listRuns(tmpDir)).find((r) => r.run_id === "run-old")!;
+    expect(run.total_tool_calls).toBeUndefined();
+    expect(run.total_response_groups).toBeUndefined();
+  });
+
+  it("sums only the entries that carry the metric in a mixed run", async () => {
+    await appendTimeline(makeEntry({ run_id: "run-mix" }), tmpDir);
+    await appendTimeline(makeEntry({ run_id: "run-mix", tool_calls: 4, response_groups: 2 }), tmpDir);
+
+    const run = (await listRuns(tmpDir)).find((r) => r.run_id === "run-mix")!;
+    expect(run.total_tool_calls).toBe(4);
+    expect(run.total_response_groups).toBe(2);
+  });
+
   it("sorts runs most-recent first", async () => {
     await appendTimeline(makeEntry({ run_id: "old", t0: "2026-04-01T10:00:00Z" }), tmpDir);
     await appendTimeline(makeEntry({ run_id: "new", t0: "2026-04-07T10:00:00Z" }), tmpDir);

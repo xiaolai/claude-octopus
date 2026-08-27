@@ -8,6 +8,7 @@
 import { resolve, isAbsolute } from "node:path";
 import {
   query,
+  type SDKMessage,
   type SDKResultMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import type { Options, InvocationOverrides, TimelineConfig } from "./types.js";
@@ -19,6 +20,31 @@ import {
 } from "./lib.js";
 import { appendTimeline, type TimelineEntry } from "./timeline.js";
 
+// ── Loop metrics ─────────────────────────────────────────────────
+
+/**
+ * Counts derived from the message stream, independent of SDK `num_turns`.
+ *
+ * `num_turns` is not an agent-loop round-trip count: across completed runs it
+ * comes back as `tool_use` blocks + 1, so parallel tool calls inflate it
+ * relative to the number of assistant responses. These two counters are what
+ * the stream actually shows, so they stay meaningful under parallel tool use.
+ *
+ * Both cover the main agent loop only — messages carrying a
+ * `parent_tool_use_id` belong to a sub-agent's own loop and are excluded.
+ */
+export interface QueryMetrics {
+  /** `tool_use` blocks emitted across the run. */
+  tool_calls: number;
+  /** Distinct assistant message IDs — one per API round trip. */
+  response_groups: number;
+}
+
+export interface QueryOutcome {
+  result: SDKResultMessage;
+  metrics: QueryMetrics;
+}
+
 // ── Result payload ───────────────────────────────────────────────
 
 export interface ResultPayload {
@@ -26,7 +52,10 @@ export interface ResultPayload {
   session_id: string;
   cost_usd: number;
   duration_ms: number;
+  /** Raw SDK `num_turns` — see {@link QueryMetrics} for why it can look high. */
   num_turns: number;
+  tool_calls?: number;
+  response_groups?: number;
   is_error: boolean;
   result?: string;
   errors?: string[];
@@ -44,6 +73,7 @@ export function buildResultPayload(
     errors?: string[];
   },
   runId: string,
+  metrics?: QueryMetrics,
 ): ResultPayload {
   const payload: ResultPayload = {
     run_id: runId,
@@ -53,6 +83,10 @@ export function buildResultPayload(
     num_turns: result.num_turns,
     is_error: result.is_error,
   };
+  if (metrics) {
+    payload.tool_calls = metrics.tool_calls;
+    payload.response_groups = metrics.response_groups;
+  }
   if (result.subtype === "success") {
     payload.result = result.result;
   } else {
@@ -63,11 +97,52 @@ export function buildResultPayload(
 
 // ── Query execution ──────────────────────────────────────────────
 
+/**
+ * Drain a query stream: capture the result message and count loop metrics.
+ *
+ * The stream can throw *after* yielding the result — the runtime exits
+ * non-zero on `error_max_turns`, and the SDK surfaces that as a stream error.
+ * Rethrowing there would discard a result that carries the real subtype, the
+ * session ID and the accrued cost, so a result already in hand wins.
+ */
+export async function consumeQuery(
+  stream: AsyncIterable<SDKMessage>,
+): Promise<QueryOutcome> {
+  const responseIds = new Set<string>();
+  let toolCalls = 0;
+  let result: SDKResultMessage | undefined;
+
+  try {
+    for await (const message of stream) {
+      if (message.type === "assistant" && message.parent_tool_use_id == null) {
+        const api = message.message;
+        if (api?.id) responseIds.add(api.id);
+        for (const block of api?.content ?? []) {
+          if (block.type === "tool_use") toolCalls++;
+        }
+      } else if (message.type === "result") {
+        result = message;
+      }
+    }
+  } catch (err) {
+    if (!result) throw err;
+  }
+
+  if (!result) {
+    throw new Error("No result message received from Claude Code");
+  }
+
+  return {
+    result,
+    metrics: { tool_calls: toolCalls, response_groups: responseIds.size },
+  };
+}
+
 export async function runQuery(
   prompt: string,
   overrides: InvocationOverrides,
   baseOptions: Options
-): Promise<SDKResultMessage> {
+): Promise<QueryOutcome> {
   const options: Options = { ...baseOptions };
 
   // Handle cwd override — validate relative paths, allow absolute paths
@@ -159,20 +234,7 @@ export async function runQuery(
     }
   }
 
-  const q = query({ prompt, options });
-  let result: SDKResultMessage | undefined;
-
-  for await (const message of q) {
-    if (message.type === "result") {
-      result = message as SDKResultMessage;
-    }
-  }
-
-  if (!result) {
-    throw new Error("No result message received from Claude Code");
-  }
-
-  return result;
+  return consumeQuery(query({ prompt, options }));
 }
 
 // ── Timeline recording ───────────────────────────────────────────
@@ -182,10 +244,11 @@ export async function recordTimeline(
   prompt: string,
   runId: string,
   t0: string,
-  result: SDKResultMessage,
+  outcome: QueryOutcome,
   cwd: string,
   timelineConfig: TimelineConfig,
 ): Promise<void> {
+  const { result, metrics } = outcome;
   const sdkResult = result as SDKResultMessage & {
     total_cost_usd: number;
     num_turns: number;
@@ -200,6 +263,8 @@ export async function recordTimeline(
     t1: new Date().toISOString(),
     cost_usd: sdkResult.total_cost_usd,
     turns: sdkResult.num_turns,
+    tool_calls: metrics.tool_calls,
+    response_groups: metrics.response_groups,
     is_error: sdkResult.is_error,
     subtype: sdkResult.subtype,
     prompt_excerpt: prompt.slice(0, 200),

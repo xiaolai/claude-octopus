@@ -18,7 +18,12 @@ export interface TimelineEntry {
   t0: string;
   t1: string;
   cost_usd: number;
+  /** Raw SDK `num_turns` — tracks tool_use blocks, not API round trips. */
   turns: number;
+  /** `tool_use` blocks in the main agent loop. Absent on entries from older versions. */
+  tool_calls?: number;
+  /** API round trips in the main agent loop. Absent on entries from older versions. */
+  response_groups?: number;
   is_error: boolean;
   subtype: string;
   prompt_excerpt: string;
@@ -32,6 +37,10 @@ export interface RunSummary {
   t1: string;
   total_cost_usd: number;
   total_turns: number;
+  /** Undefined when no entry in the run carries the metric. */
+  total_tool_calls?: number;
+  /** Undefined when no entry in the run carries the metric. */
+  total_response_groups?: number;
   has_errors: boolean;
   entry_count: number;
 }
@@ -120,6 +129,24 @@ export async function readTimeline(
 }
 
 /**
+ * Sum a metric that older entries may not carry.
+ *
+ * Returns undefined when no entry has it, so a run recorded before the metric
+ * existed reads as "unknown" rather than as a confident zero.
+ */
+function sumOptional(
+  entries: TimelineEntry[],
+  pick: (e: TimelineEntry) => number | undefined,
+): number | undefined {
+  let total: number | undefined;
+  for (const e of entries) {
+    const value = pick(e);
+    if (typeof value === "number") total = (total ?? 0) + value;
+  }
+  return total;
+}
+
+/**
  * Group entries by run_id and return summaries, most recent first.
  */
 export async function listRuns(dir: string): Promise<RunSummary[]> {
@@ -141,6 +168,8 @@ export async function listRuns(dir: string): Promise<RunSummary[]> {
       t1: list.reduce((max, e) => e.t1 > max ? e.t1 : max, list[0].t1),
       total_cost_usd: list.reduce((s, e) => s + e.cost_usd, 0),
       total_turns: list.reduce((s, e) => s + e.turns, 0),
+      total_tool_calls: sumOptional(list, (e) => e.tool_calls),
+      total_response_groups: sumOptional(list, (e) => e.response_groups),
       has_errors: list.some((e) => e.is_error),
       entry_count: list.length,
     });

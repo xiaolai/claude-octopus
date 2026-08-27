@@ -9,10 +9,17 @@ import {
   runQuery,
   buildResultPayload,
   recordTimeline,
+  type QueryOutcome,
 } from "../query-helpers.js";
 
-function formatResult(result: { session_id: string; total_cost_usd: number; duration_ms: number; num_turns: number; is_error: boolean; subtype: string; result?: string; errors?: string[] }, runId: string) {
-  const payload = buildResultPayload(result, runId);
+function formatResult(outcome: QueryOutcome, runId: string) {
+  const result = outcome.result as QueryOutcome["result"] & {
+    total_cost_usd: number;
+    subtype: string;
+    result?: string;
+    errors?: string[];
+  };
+  const payload = buildResultPayload(result, runId, outcome.metrics);
   return {
     content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }],
     isError: result.is_error,
@@ -64,11 +71,11 @@ export function registerQueryTools(
       ? (isAbsolute(cwd) || isDescendantPath(cwd, baseCwd)) ? resolve(baseCwd, cwd) : baseCwd
       : baseCwd;
     try {
-      const result = await runQuery(prompt, {
+      const outcome = await runQuery(prompt, {
         cwd, model, tools, disallowedTools, additionalDirs, plugins, effort, permissionMode, maxTurns, maxBudgetUsd, systemPrompt,
       }, baseOptions);
-      await recordTimeline(agentName, prompt, runId, t0, result, effectiveCwd, timelineConfig);
-      return formatResult(result, runId);
+      await recordTimeline(agentName, prompt, runId, t0, outcome, effectiveCwd, timelineConfig);
+      return formatResult(outcome, runId);
     } catch (error) {
       await appendTimeline({
         run_id: runId, agent: agentName, session_id: "", t0,
@@ -104,11 +111,11 @@ export function registerQueryTools(
         ? (isAbsolute(cwd) || isDescendantPath(cwd, baseCwd)) ? resolve(baseCwd, cwd) : baseCwd
         : baseCwd;
       try {
-        const result = await runQuery(prompt, {
+        const outcome = await runQuery(prompt, {
           cwd, model, maxTurns, maxBudgetUsd, resumeSessionId: session_id,
         }, baseOptions);
-        await recordTimeline(agentName, prompt, runId, t0, result, effectiveCwd, timelineConfig);
-        return formatResult(result, runId);
+        await recordTimeline(agentName, prompt, runId, t0, outcome, effectiveCwd, timelineConfig);
+        return formatResult(outcome, runId);
       } catch (error) {
         await appendTimeline({
           run_id: runId, agent: agentName, session_id: session_id || "", t0,
