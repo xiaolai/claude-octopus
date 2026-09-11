@@ -1,7 +1,7 @@
 {
   "name": "claude-octopus",
   "version": "1.2.14",
-  "description": "One brain, many arms — spawn multiple specialized Claude Code agents as MCP servers",
+  "description": "One brain, many arms \u2014 spawn multiple specialized Claude Code agents as MCP servers",
   "mcpName": "io.github.xiaolai/claude-octopus",
   "type": "module",
   "bin": {
@@ -36,5 +36,10 @@
   "license": "ISC",
   "engines": {
     "node": ">=18.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "fast-uri": "4.1.3"
+    }
   }
 }
