@@ -6,12 +6,12 @@
     "url": "https://github.com/xiaolai/claude-octopus",
     "source": "github"
   },
-  "version": "1.2.32",
+  "version": "1.2.33",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "claude-octopus",
-      "version": "1.2.32",
+      "version": "1.2.33",
       "transport": {
         "type": "stdio"
       },
